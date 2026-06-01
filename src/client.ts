@@ -15,8 +15,14 @@ export interface DraftboardClientOptions {
 
 export const DEFAULT_BASE_URL = "https://intros.draftboard.com/api/v1/integration";
 
-/** A query value can be a scalar or an array (serialized as repeated keys). */
-type QueryValue = string | number | boolean | string[] | undefined | null;
+/**
+ * A query value can be a scalar, an array (serialized as repeated keys), or a nested object
+ * (serialized as bracket notation, e.g. `paging[pageNumber]=1`).
+ */
+type QueryValue = string | number | boolean | string[] | NestedQuery | undefined | null;
+interface NestedQuery {
+  [key: string]: QueryValue;
+}
 export type Query = Record<string, QueryValue>;
 
 /** Error that never leaks the API key. */
@@ -50,28 +56,32 @@ export class DraftboardClient {
     }
   }
 
-  /** Build a query string with repeated keys for array values. */
+  /**
+   * Build a query string. Arrays → repeated keys (`tagNames=a&tagNames=b`); nested objects →
+   * bracket notation (`paging[pageNumber]=1`); empty strings / null / undefined are dropped.
+   */
   buildQuery(query?: Query): string {
     if (!query) return "";
     const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      if (value === undefined || value === null) continue;
+    const append = (key: string, value: unknown): void => {
+      if (value === undefined || value === null || value === "") return;
       if (Array.isArray(value)) {
-        for (const item of value) {
-          if (item !== undefined && item !== null && item !== "") {
-            params.append(key, String(item));
-          }
+        for (const item of value) append(key, item);
+      } else if (typeof value === "object") {
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          append(`${key}[${k}]`, v);
         }
-      } else if (value !== "") {
+      } else {
         params.append(key, String(value));
       }
-    }
+    };
+    for (const [key, value] of Object.entries(query)) append(key, value);
     const qs = params.toString();
     return qs ? `?${qs}` : "";
   }
 
   private async request<T>(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "DELETE",
     path: string,
     opts: { query?: Query; body?: unknown } = {},
   ): Promise<T> {
@@ -142,6 +152,86 @@ export class DraftboardClient {
   getTargetConnections(targetId: string, query?: Query): Promise<ConnectionsResponse> {
     const encoded = encodeURIComponent(targetId);
     return this.request<ConnectionsResponse>("GET", `/targets/${encoded}/connections`, { query });
+  }
+
+  // ---- accounts ----
+
+  getAccounts(query?: Query): Promise<unknown> {
+    return this.request<unknown>("GET", "/accounts", { query });
+  }
+
+  // ---- target management (writes) ----
+
+  /** Archive (soft-delete) a target. Not reversible via the public API. */
+  archiveTarget(targetId: string): Promise<unknown> {
+    return this.request<unknown>("DELETE", `/targets/${encodeURIComponent(targetId)}`);
+  }
+
+  /** Attach tags (by id and/or name) to one or many targets. */
+  attachTagsToTargets(body: {
+    targetIds: string[];
+    tagIds?: string[];
+    tagNames?: string[];
+  }): Promise<unknown> {
+    return this.request<unknown>("POST", "/targets/tags", { body });
+  }
+
+  // ---- supporters ----
+
+  getSupporters(params?: {
+    query?: string;
+    preferred?: boolean;
+    pageNumber?: number;
+    resultPerPage?: number;
+  }): Promise<unknown> {
+    const query: Query = {
+      filters: { query: params?.query, preferred: params?.preferred },
+      paging: { pageNumber: params?.pageNumber, resultPerPage: params?.resultPerPage },
+    };
+    return this.request<unknown>("GET", "/supporters", { query });
+  }
+
+  importSupporters(body: { linkedinUrls: string[] }): Promise<unknown> {
+    return this.request<unknown>("POST", "/supporters/import", { body });
+  }
+
+  // ---- connectors (preferred / excluded toggles, connector-first intros) ----
+
+  setConnectorPreferred(connectorId: string, enabled: boolean): Promise<unknown> {
+    const path = `/connectors/${encodeURIComponent(connectorId)}/prefer`;
+    return this.request<unknown>(enabled ? "POST" : "DELETE", path);
+  }
+
+  setConnectorExcluded(connectorId: string, enabled: boolean): Promise<unknown> {
+    const path = `/connectors/${encodeURIComponent(connectorId)}/exclude`;
+    return this.request<unknown>(enabled ? "POST" : "DELETE", path);
+  }
+
+  getConnectorIntros(
+    connectorId: string,
+    params?: { pageNumber?: number; resultPerPage?: number },
+  ): Promise<unknown> {
+    const query: Query = {
+      paging: { pageNumber: params?.pageNumber, resultPerPage: params?.resultPerPage },
+    };
+    return this.request<unknown>(
+      "GET",
+      `/connectors/${encodeURIComponent(connectorId)}/intros`,
+      { query },
+    );
+  }
+
+  // ---- intro lifecycle (writes) ----
+
+  setIntroStatus(
+    introId: string,
+    status: "requested" | "completed" | "declined",
+    body?: { reasonId?: string; customReason?: string },
+  ): Promise<unknown> {
+    const path = `/intros/${encodeURIComponent(introId)}/${status}`;
+    return this.request<unknown>("POST", path, {
+      body: status === "declined" ? (body ?? {}) : undefined,
+    });
   }
 }
 

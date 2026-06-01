@@ -27,6 +27,51 @@ describe("DraftboardClient.buildQuery", () => {
     expect(client.buildQuery()).toBe("");
     expect(client.buildQuery({})).toBe("");
   });
+
+  it("serializes nested objects as bracket notation and keeps boolean false", () => {
+    const qs = client.buildQuery({
+      filters: { query: "ann", preferred: false, blank: "" },
+      paging: { pageNumber: 1, resultPerPage: 20 },
+    });
+    expect(qs).toBe(
+      "?filters%5Bquery%5D=ann&filters%5Bpreferred%5D=false&paging%5BpageNumber%5D=1&paging%5BresultPerPage%5D=20",
+    );
+  });
+});
+
+describe("DraftboardClient extended methods", () => {
+  function mock() {
+    const fetchImpl = vi.fn(async () => jsonResponse({ status: 200 }));
+    return { fetchImpl, client: new DraftboardClient({ apiKey: "k", fetchImpl }) };
+  }
+
+  it("toggles connector preferred with POST (enable) / DELETE (disable)", async () => {
+    const { fetchImpl, client } = mock();
+    await client.setConnectorPreferred("c1", true);
+    await client.setConnectorPreferred("c1", false);
+    expect(fetchImpl.mock.calls[0][1].method).toBe("POST");
+    expect(fetchImpl.mock.calls[0][0]).toContain("/connectors/c1/prefer");
+    expect(fetchImpl.mock.calls[1][1].method).toBe("DELETE");
+  });
+
+  it("sends a body only for declined intro status", async () => {
+    const { fetchImpl, client } = mock();
+    await client.setIntroStatus("i1", "requested");
+    await client.setIntroStatus("i1", "declined", { reasonId: "prospect_declined" });
+    expect(fetchImpl.mock.calls[0][0]).toContain("/intros/i1/requested");
+    expect(fetchImpl.mock.calls[0][1].body).toBeUndefined();
+    expect(fetchImpl.mock.calls[1][0]).toContain("/intros/i1/declined");
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body)).toEqual({ reasonId: "prospect_declined" });
+  });
+
+  it("builds nested supporters query from flat params", async () => {
+    const { fetchImpl, client } = mock();
+    await client.getSupporters({ preferred: true, pageNumber: 2 });
+    const url = fetchImpl.mock.calls[0][0];
+    expect(url).toContain("/supporters?");
+    expect(decodeURIComponent(url)).toContain("filters[preferred]=true");
+    expect(decodeURIComponent(url)).toContain("paging[pageNumber]=2");
+  });
 });
 
 describe("DraftboardClient.request", () => {

@@ -67,6 +67,20 @@ The key stays on your machine — the server runs locally and never logs the `Au
 | `list_targets`           | Saved targets with `maxRank`, `pathsCount`, tags.        |
 | `import_targets`         | Import people as targets by LinkedIn URL.                |
 | `get_target_connections` | Connection paths for a target (`rank`, `rankDetails`).   |
+| `list_accounts`          | Companies with saved targets + per-account reach counts. |
+
+**Extended tools** (rest of the API; ⚠ = changes data, host-approved at runtime):
+
+| Tool                       | What it does                                                       |
+|----------------------------|-------------------------------------------------------------------|
+| `list_supporters`          | Closest / preferred connectors (`preferred: true/false/omit`).    |
+| `get_connector_intros`     | "Who can this connector introduce me to?" (connector-first view). |
+| `set_connector_preferred` ⚠| Star/unstar a connector as a preferred supporter.                 |
+| `set_connector_excluded` ⚠ | Exclude/un-exclude a connector from warm-path results.            |
+| `import_supporters` ⚠      | Add supporters by LinkedIn URL.                                   |
+| `attach_tags_to_targets` ⚠ | Tag one or many targets (by id/name).                            |
+| `set_intro_status` ⚠       | Move an intro to requested / completed / declined.               |
+| `archive_target` ⚠        | Soft-delete a target (**not reversible** via the API).           |
 
 **Outcome tools** (composed, mapped to real jobs):
 
