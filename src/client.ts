@@ -120,6 +120,10 @@ export class DraftboardClient {
       throw new DraftboardApiError(friendlyStatus(res.status, path), res.status, truncate(text));
     }
 
+    // A successful write may return 204 / an empty body — that's success, not invalid JSON.
+    if (text.trim() === "") {
+      return {} as T;
+    }
     try {
       return JSON.parse(text) as T;
     } catch {

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DraftboardClient, Query } from "../client.js";
-import { jsonResult, safeHandler } from "./util.js";
+import { errorResult, jsonResult, safeHandler } from "./util.js";
 
 /**
  * Extended thin tools — the rest of the Integration API beyond the core 5. Includes account
@@ -140,14 +140,16 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
         tagNames: z.array(z.string()).optional().describe("Tag names (auto-created if new)"),
       },
     },
-    (args) =>
-      safeHandler(async () =>
-        jsonResult(
-          await client.attachTagsToTargets(
-            args as { targetIds: string[]; tagIds?: string[]; tagNames?: string[] },
-          ),
-        ),
-      ),
+    (args) => {
+      const a = args as { targetIds: string[]; tagIds?: string[]; tagNames?: string[] };
+      const hasTags = (a.tagIds?.length ?? 0) > 0 || (a.tagNames?.length ?? 0) > 0;
+      if (!hasTags) {
+        return Promise.resolve(
+          errorResult("Provide at least one tag: pass a non-empty `tagIds` and/or `tagNames`."),
+        );
+      }
+      return safeHandler(async () => jsonResult(await client.attachTagsToTargets(a)));
+    },
   );
 
   server.registerTool(
@@ -155,13 +157,24 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
     {
       title: "Archive a target (WRITE, DESTRUCTIVE)",
       description:
-        "WRITE / DESTRUCTIVE and NOT reversible via the public API. Soft-deletes a target: it disappears from list_targets and frees its capacity slot (associated intros remain as history). Confirm with the user before calling.",
+        "WRITE / DESTRUCTIVE and NOT reversible via the public API. Soft-deletes a target: it disappears from list_targets and frees its capacity slot (associated intros remain as history). Requires `confirm: true` AND must be confirmed with the user first.",
       inputSchema: {
         targetId: z.string().describe("Target UUID to archive"),
+        confirm: z
+          .boolean()
+          .describe("Must be true to proceed — a deliberate guard against accidental irreversible deletes"),
       },
+      annotations: { destructiveHint: true, idempotentHint: false, readOnlyHint: false },
     },
     (args) => {
-      const { targetId } = args as { targetId: string };
+      const { targetId, confirm } = args as { targetId: string; confirm?: boolean };
+      if (confirm !== true) {
+        return Promise.resolve(
+          errorResult(
+            "archive_target is irreversible. Re-call with `confirm: true` only after the user has explicitly approved archiving this target.",
+          ),
+        );
+      }
       return safeHandler(async () => jsonResult(await client.archiveTarget(targetId)));
     },
   );

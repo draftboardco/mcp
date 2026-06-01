@@ -108,6 +108,12 @@ describe("DraftboardClient.request", () => {
     }
   });
 
+  it("treats an empty success body as success, not invalid JSON", async () => {
+    const fetchImpl = vi.fn(async () => new Response("", { status: 200 }));
+    const client = new DraftboardClient({ apiKey: "k", fetchImpl });
+    await expect(client.setConnectorPreferred("c1", false)).resolves.toEqual({});
+  });
+
   it("encodes path params and array query in connections", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ status: 200, connections: [] }));
     const client = new DraftboardClient({ apiKey: "k", fetchImpl });
