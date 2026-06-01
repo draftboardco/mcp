@@ -1,5 +1,19 @@
 import { DraftboardApiError } from "../client.js";
 
+/**
+ * MCP tool annotation presets (hints for hosts: auto-approve reads, prompt/guard writes).
+ * - READ_ONLY: never changes data.
+ * - WRITE: changes data but is additive and idempotent (re-running is a no-op), not destructive.
+ * - DESTRUCTIVE: irreversible data loss — hosts should require explicit confirmation.
+ */
+export const READ_ONLY = { readOnlyHint: true } as const;
+export const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: true } as const;
+export const DESTRUCTIVE = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+} as const;
+
 export interface ToolResult {
   content: { type: "text"; text: string }[];
   isError?: boolean;

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DraftboardClient, Query } from "../client.js";
-import { errorResult, jsonResult, safeHandler } from "./util.js";
+import { DESTRUCTIVE, READ_ONLY, WRITE, errorResult, jsonResult, safeHandler } from "./util.js";
 
 /**
  * Extended thin tools — the rest of the Integration API beyond the core 5. Includes account
@@ -25,6 +25,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
         pageNumber: z.number().int().positive().optional(),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },
+      annotations: READ_ONLY,
     },
     (args) => safeHandler(async () => jsonResult(await client.getAccounts(args as Query))),
   );
@@ -45,6 +46,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
         pageNumber: z.number().int().positive().optional(),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },
+      annotations: READ_ONLY,
     },
     (args) => {
       const a = args as { query?: string; preferred?: boolean; pageNumber?: number; resultPerPage?: number };
@@ -61,6 +63,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
       inputSchema: {
         linkedinUrls: z.array(z.string().url()).min(1).max(100).describe("LinkedIn profile URLs to add as supporters"),
       },
+      annotations: WRITE,
     },
     (args) =>
       safeHandler(async () =>
@@ -79,6 +82,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
         connectorId: z.string().describe("Connector UUID (e.g. from a connection's id)"),
         preferred: z.boolean().describe("true = mark preferred, false = unmark"),
       },
+      annotations: WRITE,
     },
     (args) => {
       const { connectorId, preferred } = args as { connectorId: string; preferred: boolean };
@@ -96,6 +100,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
         connectorId: z.string().describe("Connector UUID"),
         excluded: z.boolean().describe("true = exclude, false = un-exclude"),
       },
+      annotations: WRITE,
     },
     (args) => {
       const { connectorId, excluded } = args as { connectorId: string; excluded: boolean };
@@ -114,6 +119,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
         pageNumber: z.number().int().positive().optional(),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },
+      annotations: READ_ONLY,
     },
     (args) => {
       const { connectorId, pageNumber, resultPerPage } = args as {
@@ -139,6 +145,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
         tagIds: z.array(z.string()).optional().describe("Existing tag ids"),
         tagNames: z.array(z.string()).optional().describe("Tag names (auto-created if new)"),
       },
+      annotations: WRITE,
     },
     (args) => {
       const a = args as { targetIds: string[]; tagIds?: string[]; tagNames?: string[] };
@@ -164,7 +171,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
           .boolean()
           .describe("Must be true to proceed — a deliberate guard against accidental irreversible deletes"),
       },
-      annotations: { destructiveHint: true, idempotentHint: false, readOnlyHint: false },
+      annotations: DESTRUCTIVE,
     },
     (args) => {
       const { targetId, confirm } = args as { targetId: string; confirm?: boolean };
@@ -195,6 +202,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
           .describe("Only for status=declined"),
         customReason: z.string().max(200).optional().describe("Only for status=declined; free text ≤200 chars"),
       },
+      annotations: WRITE,
     },
     (args) => {
       const { introId, status, reasonId, customReason } = args as {

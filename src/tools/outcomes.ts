@@ -12,7 +12,7 @@ import {
   targetPathsCount,
 } from "../normalize.js";
 import type { IntegrationTarget } from "../types.js";
-import { jsonResult, safeHandler } from "./util.js";
+import { READ_ONLY, WRITE, jsonResult, safeHandler } from "./util.js";
 
 const TARGETS_FETCH_CAP = 200;
 
@@ -253,6 +253,7 @@ export function registerOutcomeTools(server: McpServer, client: DraftboardClient
         connectorsPerTarget: z.number().int().positive().max(10).optional().describe("Top connectors per target (default 3)"),
         includeRankDetails: z.boolean().optional().describe("Include shared-history reasons (default true)"),
       },
+      annotations: READ_ONLY,
     },
     (args) => safeHandler(async () => jsonResult(await findTopPaths(client, args as FindTopPathsParams))),
   );
@@ -268,6 +269,8 @@ export function registerOutcomeTools(server: McpServer, client: DraftboardClient
         importIfMissing: z.boolean().optional().describe("Import URLs that are not yet targets (default true)"),
         tags: z.array(z.string()).optional().describe("Tags to apply to any imported targets"),
       },
+      // Writes by default: imports any URLs that are not yet targets (importIfMissing defaults true).
+      annotations: WRITE,
     },
     (args) => safeHandler(async () => jsonResult(await checkIfConnected(client, args as CheckIfConnectedParams))),
   );
@@ -281,6 +284,7 @@ export function registerOutcomeTools(server: McpServer, client: DraftboardClient
       inputSchema: {
         tagNames: z.array(z.string()).optional().describe("Only summarize targets with these tags"),
       },
+      annotations: READ_ONLY,
     },
     (args) => safeHandler(async () => jsonResult(await introStatusOverview(client, args as IntroStatusOverviewParams))),
   );

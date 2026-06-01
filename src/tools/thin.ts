@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DraftboardClient, Query } from "../client.js";
-import { jsonResult, safeHandler } from "./util.js";
+import { READ_ONLY, WRITE, jsonResult, safeHandler } from "./util.js";
 
 /**
  * Thin tools: 1:1 with the Integration API endpoints. They pass the raw JSON response through
@@ -16,6 +16,7 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
       description:
         "Return the authenticated customer: `{ id, name, user{ id, firstName, lastName, linkedinUrl } }`. Call this first to confirm whose account you are working with. (Team-member ids for `ownerIds` filters come from the `owners[]` on connections, not from here.)",
       inputSchema: {},
+      annotations: READ_ONLY,
     },
     () => safeHandler(async () => jsonResult(await client.getMe())),
   );
@@ -32,6 +33,7 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
         pageNumber: z.number().int().positive().optional().describe("1-based page number"),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },
+      annotations: READ_ONLY,
     },
     (args) =>
       safeHandler(async () => jsonResult(await client.listTags(args as Query))),
@@ -51,6 +53,7 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
         pageNumber: z.number().int().positive().optional().describe("1-based page number"),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },
+      annotations: READ_ONLY,
     },
     (args) =>
       safeHandler(async () => jsonResult(await client.listTargets(args as Query))),
@@ -69,6 +72,7 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
           .describe("LinkedIn profile URLs to import"),
         tags: z.array(z.string()).optional().describe("Tag names to apply"),
       },
+      annotations: WRITE,
     },
     (args) =>
       safeHandler(async () =>
@@ -91,6 +95,7 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
         pageNumber: z.number().int().positive().optional().describe("1-based page number"),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },
+      annotations: READ_ONLY,
     },
     (args) =>
       safeHandler(async () => {
