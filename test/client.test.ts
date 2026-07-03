@@ -45,6 +45,15 @@ describe("DraftboardClient extended methods", () => {
     return { fetchImpl, client: new DraftboardClient({ apiKey: "k", fetchImpl }) };
   }
 
+  it("forwards accountId (company filter) as a query param on list_targets", async () => {
+    const { fetchImpl, client } = mock();
+    await client.listTargets({ accountId: "acc1", tagNames: ["vip"] });
+    const url = fetchImpl.mock.calls[0][0] as string;
+    expect(url).toContain("/targets?");
+    expect(url).toContain("accountId=acc1");
+    expect(url).toContain("tagNames=vip");
+  });
+
   it("toggles connector preferred with POST (enable) / DELETE (disable)", async () => {
     const { fetchImpl, client } = mock();
     await client.setConnectorPreferred("c1", true);

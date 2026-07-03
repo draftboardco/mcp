@@ -44,12 +44,16 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
     {
       title: "List targets",
       description:
-        "List the customer's saved targets (leads) with status, best path rank (`maxRank`), path count (`pathsCount`), and tags. Filter by tag, status, or update time. Paginated — loop pages until `nextPage` is 0.",
+        "List the customer's saved targets (leads) with status, best path rank (`maxRank`), path count (`pathsCount`), and tags. Filter by tag, status, update time, or **company** (`accountId`). To scope to a company, first resolve its name to an id with `list_accounts` (company search), then pass that id as `accountId` here — far cheaper than paging the whole target list. Paginated — loop pages until `nextPage` is 0.",
       inputSchema: {
         updatedSince: z.string().optional().describe("ISO 8601 timestamp filter"),
         tagIds: z.array(z.string()).optional(),
         tagNames: z.array(z.string()).optional(),
         statuses: z.array(z.enum(["new", "completed", "stopped"])).optional(),
+        accountId: z
+          .string()
+          .optional()
+          .describe("Only targets at this company — an account id from `list_accounts`. Resolve a company name via `list_accounts` first."),
         pageNumber: z.number().int().positive().optional().describe("1-based page number"),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },

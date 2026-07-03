@@ -91,6 +91,16 @@ describe("findTopPaths", () => {
     expect(out.opportunities[0].connector).toBe("Zoe Q");
     expect(out.opportunities[0].target).toBe("Xavier Y");
   });
+
+  it("scopes to a company by forwarding accountId to listTargets", async () => {
+    const listTargets = vi.fn(async () => ({ status: 200, count: 0, nextPage: 0, targets: [] }));
+    const getTargetConnections = vi.fn();
+    const client = fakeClient({ listTargets, getTargetConnections });
+    await findTopPaths(client, { accountId: "acc1" });
+    expect(listTargets).toHaveBeenCalledWith(expect.objectContaining({ accountId: "acc1" }));
+    // no targets at that company → no connection walk
+    expect(getTargetConnections).not.toHaveBeenCalled();
+  });
 });
 
 describe("checkIfConnected", () => {

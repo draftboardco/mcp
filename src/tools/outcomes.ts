@@ -20,6 +20,7 @@ const TARGETS_FETCH_CAP = 200;
 
 export interface FindTopPathsParams {
   tagNames?: string[];
+  accountId?: string;
   ownerIds?: string[];
   statuses?: string[];
   minTargetMaxRank?: number;
@@ -38,7 +39,13 @@ export async function findTopPaths(client: DraftboardClient, p: FindTopPathsPara
 
   const targetsPage = await fetchAllPages(
     (pageNumber) =>
-      client.listTargets({ tagNames: p.tagNames, statuses, pageNumber, resultPerPage: 50 }),
+      client.listTargets({
+        tagNames: p.tagNames,
+        accountId: p.accountId,
+        statuses,
+        pageNumber,
+        resultPerPage: 50,
+      }),
     (r) => r.targets ?? [],
     { maxItems: TARGETS_FETCH_CAP, maxPages: 20 },
   );
@@ -232,9 +239,13 @@ export function registerOutcomeTools(server: McpServer, client: DraftboardClient
     {
       title: "Find top warm-intro paths",
       description:
-        "Find the best warm-introduction opportunities right now. Ranks saved targets by best path rank, then fetches each one's strongest connectors and returns the top intro opportunities (connector → target with shared-history `rankDetails`). Use `ownerIds` for paths through specific teammates, `tagNames`/`statuses` to scope, `connectorsPerTarget`+`includeRankDetails` for cold-email name-drops. EXPENSIVE: walks connections per target — always scope with filters; do not call with no narrowing on large lists. Returns a `telemetry` block describing coverage.",
+        "Find the best warm-introduction opportunities right now. Ranks saved targets by best path rank, then fetches each one's strongest connectors and returns the top intro opportunities (connector → target with shared-history `rankDetails`). Use `ownerIds` for paths through specific teammates, `tagNames`/`statuses`/`accountId` to scope, `connectorsPerTarget`+`includeRankDetails` for cold-email name-drops. To scope to one company (e.g. \"best intros to my OpenAI targets\"), resolve the company with `list_accounts` and pass its id as `accountId`. EXPENSIVE: walks connections per target — always scope with filters; do not call with no narrowing on large lists. Returns a `telemetry` block describing coverage.",
       inputSchema: {
         tagNames: z.array(z.string()).optional().describe("Only consider targets with these tags"),
+        accountId: z
+          .string()
+          .optional()
+          .describe("Only targets at this company — an account id from `list_accounts`. Scopes 'best intros' to one company."),
         ownerIds: z.array(z.string()).optional().describe("Only paths through these team members"),
         statuses: z
           .array(z.enum(["new", "completed", "stopped"]))
