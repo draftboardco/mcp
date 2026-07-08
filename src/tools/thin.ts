@@ -14,7 +14,7 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
     {
       title: "Get current Draftboard customer",
       description:
-        "Return the authenticated customer: `{ id, name, user{ id, firstName, lastName, linkedinUrl } }`. Call this first to confirm whose account you are working with. (Team-member ids for `ownerIds` filters come from the `owners[]` on connections, not from here.)",
+        "Return the authenticated customer: `{ id, name, user{ id, firstName, lastName, linkedinUrl }, teamMembers[]{ id, firstName, lastName, linkedinUrl } }`. Call this first to confirm whose account you are working with. `teamMembers` is your team roster — to filter paths through a teammate, match them by name here and pass their `id` as `ownerIds`.",
       inputSchema: {},
       annotations: READ_ONLY,
     },

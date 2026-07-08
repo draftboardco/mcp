@@ -75,9 +75,13 @@ export interface MeResponse {
     id?: string;
     /** Customer/company name. */
     name?: string;
-    /** The owner user (current API). `profile` is a legacy/tolerant alias. */
+    /** The API-key owner (current API). `profile` is a legacy/tolerant alias. */
     user?: Person;
     profile?: Profile;
+    /** The caller's own customer_profile_id — usable as an `ownerIds` value. */
+    customerProfileId?: string;
+    /** Team roster — each member's `id` is a customer_profile_id you can pass as `ownerIds`. */
+    teamMembers?: Member[];
   };
 }
 

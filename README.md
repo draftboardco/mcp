@@ -5,6 +5,10 @@ Integration API**. It lets any MCP-capable agent (Claude, Codex, etc.) work with
 warm-introduction data — targets, connection paths, ranks, and tags — to answer questions like
 "who are my best intro opportunities right now?" or "am I already connected to these people?".
 
+> **Just want to get intros (not build on the API)?** Also install the companion
+> **[`draftboard-intros` skill](https://github.com/draftboardco/draftboard-skill)** — it teaches your
+> assistant which tool to reach for and how to read the results. This server is only the engine.
+
 ## Requirements
 
 - Node.js **20+**
@@ -22,7 +26,7 @@ The server speaks MCP over stdio. Point your client at it and pass the key via e
   "mcpServers": {
     "draftboard": {
       "command": "npx",
-      "args": ["-y", "@draftboard/mcp"],
+      "args": ["-y", "github:draftboardco/mcp"],
       "env": {
         "DRAFTBOARD_API_KEY": "db-api_xxxxxxxx"
       }
@@ -93,6 +97,28 @@ The key stays on your machine — the server runs locally and never logs the `Au
 Outcome tools that walk connections are bounded and return a `telemetry` block
 (`targetsMatched`, `targetsScanned`, `connectionsFetched`, `truncated`, `nextSuggestedFilter`) so
 you always know the coverage of an answer. Scope them with filters before running on large lists.
+
+## Setup (for your assistant)
+
+*If you're an AI assistant that a user asked to set up Draftboard from this repo, do this, then tell
+the user it's ready:*
+
+1. Configure a stdio MCP server named `draftboard` in the user's client (Claude Code `.mcp.json`,
+   Claude Desktop config, etc.): command `npx`, args `["-y", "github:draftboardco/mcp"]`, env
+   `DRAFTBOARD_API_KEY` = the key the user gave you. Use your MCP-add command or edit the config file
+   directly. Never print the key back.
+2. Also install the companion skill so the assistant uses these tools well: copy the
+   `draftboard-intros/` folder from
+   [`draftboardco/draftboard-skill`](https://github.com/draftboardco/draftboard-skill) into the
+   user's skills directory (`~/.claude/skills/` for Claude Code).
+3. Verify with the `get_me` tool — a returned name means it works. Missing tools → restart the
+   client; `401` → the key is wrong or expired.
+
+## Feedback & support
+
+Early beta — please report issues at
+**[github.com/draftboardco/mcp/issues](https://github.com/draftboardco/mcp/issues)**. The server
+never logs your API key, so pasting the full error output is safe and speeds up a fix.
 
 ## License
 
