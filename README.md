@@ -103,6 +103,8 @@ you always know the coverage of an answer. Scope them with filters before runnin
 *If you're an AI assistant that a user asked to set up Draftboard from this repo, do this, then tell
 the user it's ready:*
 
+0. Check `npx --version` (needs Node.js 20+). If it's missing, point the user to <https://nodejs.org>
+   to install Node and stop until they have.
 1. Configure a stdio MCP server named `draftboard` in the user's client (Claude Code `.mcp.json`,
    Claude Desktop config, etc.): command `npx`, args `["-y", "github:draftboardco/mcp"]`, env
    `DRAFTBOARD_API_KEY` = the key the user gave you. Use your MCP-add command or edit the config file
