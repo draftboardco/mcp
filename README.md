@@ -5,6 +5,9 @@ Integration API**. It lets any MCP-capable agent (Claude, Codex, etc.) work with
 warm-introduction data — targets, connection paths, ranks, and tags — to answer questions like
 "who are my best intro opportunities right now?" or "am I already connected to these people?".
 
+[Draftboard](https://draftboard.com) maps how your team is really connected to your prospects; this
+server exposes that data over MCP. API reference: <https://intros.draftboard.com/api>.
+
 > **Just want to get intros (not build on the API)?** Also install the companion
 > **[`draftboard-intros` skill](https://github.com/draftboardco/draftboard-skill)** — it teaches your
 > assistant which tool to reach for and how to read the results. This server is only the engine.
@@ -12,8 +15,8 @@ warm-introduction data — targets, connection paths, ranks, and tags — to ans
 ## Requirements
 
 - Node.js **20+**
-- A Draftboard Integration API key (Pro/Team plan with API access). Find it in Draftboard under
-  **Settings → API keys**.
+- A Draftboard Integration API key (Pro/Team plan with API access). Find it in the
+  [Draftboard app](https://intros.draftboard.com) under **Settings → API keys**.
 
 ## Quick start
 
