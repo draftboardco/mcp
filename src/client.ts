@@ -164,6 +164,31 @@ export class DraftboardClient {
     return this.request<unknown>("GET", "/accounts", { query });
   }
 
+  // ---- prospecting: account search + pool (BETA) ----
+
+  /**
+   * BETA. Start a search for people with the given titles at the given companies. Returns a
+   * campaignId; discovered people surface asynchronously in the pool.
+   */
+  searchAccounts(body: { companies: string[]; titles: string[]; name?: string }): Promise<unknown> {
+    return this.request<unknown>("POST", "/search/accounts", { body });
+  }
+
+  /** List pool prospects (potential prospects awaiting confirm/reject). */
+  listPool(query?: Query): Promise<unknown> {
+    return this.request<unknown>("GET", "/pool", { query });
+  }
+
+  /** Confirm pool prospects into saved targets (capacity-checked, idempotent). */
+  confirmPool(body: { ids: string[] }): Promise<unknown> {
+    return this.request<unknown>("POST", "/pool/confirm", { body });
+  }
+
+  /** Reject (soft-delete) pending pool prospects. Idempotent. */
+  rejectPool(body: { ids: string[] }): Promise<unknown> {
+    return this.request<unknown>("POST", "/pool/reject", { body });
+  }
+
   // ---- target management (writes) ----
 
   /** Archive (soft-delete) a target. Not reversible via the public API. */

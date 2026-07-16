@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { createClient, loadConfig } from "./config.js";
 import { registerThinTools } from "./tools/thin.js";
 import { registerExtendedTools } from "./tools/extended.js";
+import { registerProspectingTools } from "./tools/prospecting.js";
 import { registerOutcomeTools } from "./tools/outcomes.js";
 
 async function main(): Promise<void> {
@@ -12,11 +13,12 @@ async function main(): Promise<void> {
 
   const server = new McpServer({
     name: "draftboard-mcp",
-    version: "0.1.0",
+    version: "1.0.0-alpha.2",
   });
 
   registerThinTools(server, client);
   registerExtendedTools(server, client);
+  registerProspectingTools(server, client);
   registerOutcomeTools(server, client);
 
   const transport = new StdioServerTransport();

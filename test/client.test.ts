@@ -54,6 +54,37 @@ describe("DraftboardClient extended methods", () => {
     expect(url).toContain("tagNames=vip");
   });
 
+  it("forwards the title filter as a query param on list_targets", async () => {
+    const { fetchImpl, client } = mock();
+    await client.listTargets({ title: "Head of Sales" });
+    const url = fetchImpl.mock.calls[0][0] as string;
+    expect(url).toContain("/targets?");
+    expect(url).toContain("title=Head");
+  });
+
+  it("posts an account search body to /search/accounts", async () => {
+    const { fetchImpl, client } = mock();
+    await client.searchAccounts({ companies: ["acme.com"], titles: ["Head of Sales"] });
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(url).toContain("/search/accounts");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ companies: ["acme.com"], titles: ["Head of Sales"] });
+  });
+
+  it("reads the pool with GET and posts confirm / reject ids", async () => {
+    const { fetchImpl, client } = mock();
+    await client.listPool({ campaignId: "camp1" });
+    await client.confirmPool({ ids: ["p1", "p2"] });
+    await client.rejectPool({ ids: ["p3"] });
+    expect(fetchImpl.mock.calls[0][0]).toContain("/pool?");
+    expect(fetchImpl.mock.calls[0][0]).toContain("campaignId=camp1");
+    expect(fetchImpl.mock.calls[1][0]).toContain("/pool/confirm");
+    expect(fetchImpl.mock.calls[1][1].method).toBe("POST");
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body)).toEqual({ ids: ["p1", "p2"] });
+    expect(fetchImpl.mock.calls[2][0]).toContain("/pool/reject");
+    expect(JSON.parse(fetchImpl.mock.calls[2][1].body)).toEqual({ ids: ["p3"] });
+  });
+
   it("toggles connector preferred with POST (enable) / DELETE (disable)", async () => {
     const { fetchImpl, client } = mock();
     await client.setConnectorPreferred("c1", true);

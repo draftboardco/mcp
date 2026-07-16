@@ -70,7 +70,7 @@ The key stays on your machine — the server runs locally and never logs the `Au
 | Tool                     | What it does                                              |
 |--------------------------|----------------------------------------------------------|
 | `get_me`                 | Authenticated customer + team members.                   |
-| `list_tags`              | Tags (manual / automatic / icp), paginated.              |
+| `list_tags`              | Tags — `manual` (you created) or `automatic` (system batch/date marker), paginated. |
 | `list_targets`           | Saved targets with `maxRank`, `pathsCount`, tags.        |
 | `import_targets`         | Import people as targets by LinkedIn URL.                |
 | `get_target_connections` | Connection paths for a target (`rank`, `rankDetails`).   |
@@ -88,6 +88,15 @@ The key stays on your machine — the server runs locally and never logs the `Au
 | `attach_tags_to_targets` ⚠ | Tag one or many targets (by id/name).                            |
 | `set_intro_status` ⚠       | Move an intro to requested / completed / declined.               |
 | `archive_target` ⚠        | Soft-delete a target (**not reversible** via the API).           |
+
+**Prospecting tools** (company-first discovery — ⚠ BETA · Team/Enterprise · async):
+
+| Tool                | What it does                                                             |
+|---------------------|-------------------------------------------------------------------------|
+| `search_accounts` ⚠ | Find NEW people by job title at named companies (domains / LinkedIn company URLs). Returns a `campaignId`; people surface in the pool asynchronously. |
+| `list_pool`         | Read the pool — prospects a search found, awaiting confirm/reject (filter by `campaignId`). |
+| `confirm_pool` ⚠    | Promote pool prospects into saved targets (capacity-checked).           |
+| `reject_pool` ⚠     | Discard pending pool prospects.                                         |
 
 **Outcome tools** (composed, mapped to real jobs):
 

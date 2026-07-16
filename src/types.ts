@@ -65,7 +65,7 @@ export interface IntegrationConnection extends Person {
 export interface IntegrationTag {
   id: string;
   title: string;
-  type?: string; // manual | automatic | icp
+  type?: string; // "manual" (user-created) | "automatic" (system batch/date marker). No "icp" today.
 }
 
 export interface MeResponse {
@@ -105,4 +105,4 @@ export interface TagsResponse extends PaginatedResponse {
 }
 
 export type TargetStatus = "new" | "completed" | "stopped";
-export type TagType = "manual" | "automatic" | "icp";
+export type TagType = "manual" | "automatic";

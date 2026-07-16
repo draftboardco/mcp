@@ -26,10 +26,13 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
     {
       title: "List tags",
       description:
-        "List the customer's tags (manual, automatic, or icp). Use to discover tag names/ids before filtering targets. Paginated.",
+        "List the customer's tags. Tag `type` is either `manual` (a label the customer created and applied themselves, e.g. via import or attach-tags) or `automatic` (a system-generated batch marker Draftboard stamps on everything ingested together — usually the date of the campaign/upload/discovery batch, e.g. \"20-Apr-2026\"). There is no queryable `icp` tag type. Use to discover tag names/ids before filtering targets. Paginated.",
       inputSchema: {
         query: z.string().optional().describe("Search by tag name"),
-        type: z.enum(["manual", "automatic", "icp"]).optional(),
+        type: z
+          .enum(["manual", "automatic"])
+          .optional()
+          .describe("Filter to user-created (manual) or system batch (automatic) tags"),
         pageNumber: z.number().int().positive().optional().describe("1-based page number"),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },
@@ -44,7 +47,7 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
     {
       title: "List targets",
       description:
-        "List the customer's saved targets (leads) with status, best path rank (`maxRank`), path count (`pathsCount`), and tags. Filter by tag, status, update time, or **company** (`accountId`). To scope to a company, first resolve its name to an id with `list_accounts` (company search), then pass that id as `accountId` here — far cheaper than paging the whole target list. Paginated — loop pages until `nextPage` is 0.",
+        "List the customer's saved targets (leads) with status, best path rank (`maxRank`), path count (`pathsCount`), and tags. Filter by tag, status, update time, **company** (`accountId`), or **title/position** (`title`). To scope to a company, first resolve its name to an id with `list_accounts` (company search), then pass that id as `accountId` here — far cheaper than paging the whole target list. Paginated — loop pages until `nextPage` is 0.",
       inputSchema: {
         updatedSince: z.string().optional().describe("ISO 8601 timestamp filter"),
         tagIds: z.array(z.string()).optional(),
@@ -54,6 +57,10 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
           .string()
           .optional()
           .describe("Only targets at this company — an account id from `list_accounts`. Resolve a company name via `list_accounts` first."),
+        title: z
+          .string()
+          .optional()
+          .describe('Only targets whose title/position contains this text (case-insensitive substring). e.g. "Head of Sales".'),
         pageNumber: z.number().int().positive().optional().describe("1-based page number"),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },
