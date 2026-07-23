@@ -36,20 +36,35 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
     {
       title: "List supporters (closest / preferred connectors)",
       description:
-        "List the customer's supporters — connectors marked as preferred plus the broader non-excluded network. Set `preferred: true` for starred supporters only, `false` for non-starred only, or omit for the full non-excluded list. This is how you see 'my closest connections'.",
+        "List the customer's supporters — connectors marked as preferred plus the broader non-excluded network. Set `preferred: true` for starred supporters only, `false` for non-starred only, or omit for the full non-excluded list. Narrow by cadence `tiers` (tier 1 = closest / 'ask anytime', tier 5 = do-not-ask) — this is the richer successor to the `preferred` flag. This is how you see 'my closest connections'.",
       inputSchema: {
         query: z.string().optional().describe("Search by name"),
         preferred: z
           .boolean()
           .optional()
           .describe("true = starred/preferred only, false = non-starred only, omit = full network"),
+        tiers: z
+          .array(z.number().int().min(1).max(5))
+          .optional()
+          .describe(
+            "Filter by cadence tier 1..5. NOTE the direction: tier 1 = your closest / 'ask anytime' " +
+              "supporters (shown as 5★ in the app), ascending to tier 5 = do-not-ask/excluded (1★). " +
+              "Multi-select, any-of (OR); scoped to your own tier assignments; omit for no tier filter. " +
+              "For 'my closest connections' use [1] or [1,2] — NOT [5].",
+          ),
         pageNumber: z.number().int().positive().optional(),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },
       annotations: READ_ONLY,
     },
     (args) => {
-      const a = args as { query?: string; preferred?: boolean; pageNumber?: number; resultPerPage?: number };
+      const a = args as {
+        query?: string;
+        preferred?: boolean;
+        tiers?: number[];
+        pageNumber?: number;
+        resultPerPage?: number;
+      };
       return safeHandler(async () => jsonResult(await client.getSupporters(a)));
     },
   );

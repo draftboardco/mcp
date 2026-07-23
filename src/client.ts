@@ -210,6 +210,7 @@ export class DraftboardClient {
   getSupporters(params?: {
     query?: string;
     preferred?: boolean;
+    tiers?: number[];
     pageNumber?: number;
     resultPerPage?: number;
   }): Promise<unknown> {
@@ -217,6 +218,14 @@ export class DraftboardClient {
       filters: { query: params?.query, preferred: params?.preferred },
       paging: { pageNumber: params?.pageNumber, resultPerPage: params?.resultPerPage },
     };
+    // Cadence-tier filter (backend tiers 1..5; tier 1 = closest, tier 5 = do-not-ask/excluded).
+    // Emit the bracketed repeated form `filters[tiers][]=1&filters[tiers][]=2` to match the gateway
+    // DTO (GetSupportersFiltersDto.tiers, @ApiPropertyOptional name 'filters[tiers][]'). The `[]`
+    // forces an array even for a single value — the DTO's @Transform maps over the array and would
+    // break on a lone unbracketed `filters[tiers]=1` (parsed as a scalar string).
+    if (params?.tiers && params.tiers.length > 0) {
+      query["filters[tiers][]"] = params.tiers.map(String);
+    }
     return this.request<unknown>("GET", "/supporters", { query });
   }
 

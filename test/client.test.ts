@@ -112,6 +112,22 @@ describe("DraftboardClient extended methods", () => {
     expect(decodeURIComponent(url)).toContain("filters[preferred]=true");
     expect(decodeURIComponent(url)).toContain("paging[pageNumber]=2");
   });
+
+  it("serializes supporters tiers as bracketed repeated keys", async () => {
+    const { fetchImpl, client } = mock();
+    await client.getSupporters({ tiers: [1, 2] });
+    const url = decodeURIComponent(fetchImpl.mock.calls[0][0] as string);
+    // Bracketed repeated form so a single tier still arrives as an array for the gateway DTO.
+    expect(url).toContain("filters[tiers][]=1");
+    expect(url).toContain("filters[tiers][]=2");
+  });
+
+  it("omits the tiers key entirely when the array is empty", async () => {
+    const { fetchImpl, client } = mock();
+    await client.getSupporters({ preferred: true, tiers: [] });
+    const url = decodeURIComponent(fetchImpl.mock.calls[0][0] as string);
+    expect(url).not.toContain("filters[tiers]");
+  });
 });
 
 describe("DraftboardClient.request", () => {

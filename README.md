@@ -80,7 +80,7 @@ The key stays on your machine — the server runs locally and never logs the `Au
 
 | Tool                       | What it does                                                       |
 |----------------------------|-------------------------------------------------------------------|
-| `list_supporters`          | Closest / preferred connectors (`preferred: true/false/omit`).    |
+| `list_supporters`          | Closest / preferred connectors (`preferred: true/false/omit`; `tiers: [1..5]`, tier 1 = closest). |
 | `get_connector_intros`     | "Who can this connector introduce me to?" (connector-first view). |
 | `set_connector_preferred` ⚠| Star/unstar a connector as a preferred supporter.                 |
 | `set_connector_excluded` ⚠ | Exclude/un-exclude a connector from warm-path results.            |
