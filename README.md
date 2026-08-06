@@ -38,6 +38,24 @@ The server speaks MCP over stdio. Point your client at it and pass the key via e
 }
 ```
 
+### Codex CLI
+
+```bash
+codex mcp add draftboard --env DRAFTBOARD_API_KEY=db-api_xxxx -- npx -y github:draftboardco/mcp
+```
+
+or in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.draftboard]
+command = "npx"
+args = ["-y", "github:draftboardco/mcp"]
+startup_timeout_sec = 60   # first `npx github:` launch clones + builds the server
+
+[mcp_servers.draftboard.env]
+DRAFTBOARD_API_KEY = "db-api_xxxxxxxx"
+```
+
 ### Run from source
 
 ```bash
@@ -61,7 +79,8 @@ DRAFTBOARD_API_KEY=db-api_xxxx npm run smoke -- --full  # also runs a status ove
 | `DRAFTBOARD_BASE_URL`   | no       | `https://intros.draftboard.com/api/v1/integration`   | Override for self-host/dev.   |
 | `DRAFTBOARD_TIMEOUT_MS` | no       | `20000`                                              | Per-request timeout.          |
 
-The key stays on your machine — the server runs locally and never logs the `Authorization` header.
+The key is used only to call Draftboard's API from your machine — it is never sent to the model
+provider (OpenAI / Anthropic) or any third party, and the server never logs the `Authorization` header.
 
 ## Tools
 
@@ -84,6 +103,7 @@ The key stays on your machine — the server runs locally and never logs the `Au
 | `get_connector_intros`     | "Who can this connector introduce me to?" (connector-first view). |
 | `set_connector_preferred` ⚠| Star/unstar a connector as a preferred supporter.                 |
 | `set_connector_excluded` ⚠ | Exclude/un-exclude a connector from warm-path results.            |
+| `set_connector_tier` ⚠     | Rate a connector (personal cadence tier 0–5; 1 = closest / "ask anytime" ★★★★, 5 = do-not-ask, 0 = clear). |
 | `import_supporters` ⚠      | Add supporters by LinkedIn URL.                                   |
 | `attach_tags_to_targets` ⚠ | Tag one or many targets (by id/name).                            |
 | `set_intro_status` ⚠       | Move an intro to requested / completed / declined.               |
@@ -117,14 +137,15 @@ the user it's ready:*
 
 0. Check `npx --version` (needs Node.js 20+). If it's missing, point the user to <https://nodejs.org>
    to install Node and stop until they have.
-1. Configure a stdio MCP server named `draftboard` in the user's client (Claude Code `.mcp.json`,
-   Claude Desktop config, etc.): command `npx`, args `["-y", "github:draftboardco/mcp"]`, env
-   `DRAFTBOARD_API_KEY` = the key the user gave you. Use your MCP-add command or edit the config file
-   directly. Never print the key back.
+1. Configure a stdio MCP server named `draftboard` in the user's client: command `npx`, args
+   `["-y", "github:draftboardco/mcp"]`, env `DRAFTBOARD_API_KEY` = the key the user gave you. On Claude,
+   use your MCP-add command or edit `.mcp.json` / the Claude Desktop config; on Codex CLI, run
+   `codex mcp add draftboard --env DRAFTBOARD_API_KEY=<key> -- npx -y github:draftboardco/mcp`. Never
+   print the key back.
 2. Also install the companion skill so the assistant uses these tools well: copy the
    `draftboard-intros/` folder from
    [`draftboardco/draftboard-skill`](https://github.com/draftboardco/draftboard-skill) into the
-   user's skills directory (`~/.claude/skills/` for Claude Code).
+   user's skills directory — `~/.claude/skills/` for Claude Code, `~/.codex/skills/` for Codex CLI.
 3. Verify with the `get_me` tool — a returned name means it works. Missing tools → restart the
    client; `401` → the key is wrong or expired.
 

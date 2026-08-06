@@ -81,7 +81,7 @@ export class DraftboardClient {
   }
 
   private async request<T>(
-    method: "GET" | "POST" | "DELETE",
+    method: "GET" | "POST" | "PUT" | "DELETE",
     path: string,
     opts: { query?: Query; body?: unknown } = {},
   ): Promise<T> {
@@ -243,6 +243,13 @@ export class DraftboardClient {
   setConnectorExcluded(connectorId: string, enabled: boolean): Promise<unknown> {
     const path = `/connectors/${encodeURIComponent(connectorId)}/exclude`;
     return this.request<unknown>(enabled ? "POST" : "DELETE", path);
+  }
+
+  // Set the personal cadence tier (rating). tier 0..5: 1 = closest / 'ask anytime',
+  // 5 = do-not-ask (also excludes), 0 = clear the rating. Lower is better.
+  setConnectorTier(connectorId: string, tier: number): Promise<unknown> {
+    const path = `/connectors/${encodeURIComponent(connectorId)}/tier`;
+    return this.request<unknown>("PUT", path, { body: { tier } });
   }
 
   getConnectorIntros(

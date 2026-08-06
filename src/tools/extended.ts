@@ -36,7 +36,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
     {
       title: "List supporters (closest / preferred connectors)",
       description:
-        "List the customer's supporters — connectors marked as preferred plus the broader non-excluded network. Set `preferred: true` for starred supporters only, `false` for non-starred only, or omit for the full non-excluded list. Narrow by cadence `tiers` (tier 1 = closest / 'ask anytime', tier 5 = do-not-ask) — this is the richer successor to the `preferred` flag. This is how you see 'my closest connections'.",
+        "List the customer's supporters — connectors marked as preferred plus the broader non-excluded network. Set `preferred: true` for starred supporters only, `false` for non-starred only, or omit for the full non-excluded list. Narrow by cadence `tiers` (tier 1 = closest / 'ask anytime', tier 5 = do-not-ask) — this is the richer successor to the `preferred` flag. This is how you see 'my closest connections'. Each supporter in the response carries its current `tier` (your personal rating 1..5; absent when unreviewed) — set it with `set_connector_tier`.",
       inputSchema: {
         query: z.string().optional().describe("Search by name"),
         preferred: z
@@ -48,7 +48,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
           .optional()
           .describe(
             "Filter by cadence tier 1..5. NOTE the direction: tier 1 = your closest / 'ask anytime' " +
-              "supporters (shown as 5★ in the app), ascending to tier 5 = do-not-ask/excluded (1★). " +
+              "supporters (shown as ★★★★ / 4★ in the app), ascending to tier 5 = do-not-ask/excluded (0★). " +
               "Multi-select, any-of (OR); scoped to your own tier assignments; omit for no tier filter. " +
               "For 'my closest connections' use [1] or [1,2] — NOT [5].",
           ),
@@ -120,6 +120,33 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
     (args) => {
       const { connectorId, excluded } = args as { connectorId: string; excluded: boolean };
       return safeHandler(async () => jsonResult(await client.setConnectorExcluded(connectorId, excluded)));
+    },
+  );
+
+  server.registerTool(
+    "set_connector_tier",
+    {
+      title: "Set a connector's rating / cadence tier (WRITE)",
+      description:
+        "WRITE. Set your personal rating (cadence tier) for a connector — the 'star rating' that decides who to reach out to. This is how you 'rate' or 'prioritize' supporters. `tier` 1..5 where 1 = closest / 'ask anytime' (★★★★, the BEST), 4 = ★, 5 = 'do not ask' (also excludes the connector), 0 = clears the rating. NOTE the inversion: tier 1 is the best, not the worst — for 'my closest' set 1, not 5. The rating is read back on `list_supporters` (each supporter's `tier` field) and filterable there via `tiers`. Personal to the API-key owner.",
+      inputSchema: {
+        connectorId: z
+          .string()
+          .describe("Connector UUID — a connection's `connectorId` (NOT its `id`), or a supporter's `id`"),
+        tier: z
+          .number()
+          .int()
+          .min(0)
+          .max(5)
+          .describe(
+            "Rating 0..5. 1 = closest / 'ask anytime' (best, ★★★★) … 4 = ★, 5 = 'do not ask' (also excludes), 0 = clear. Lower is better.",
+          ),
+      },
+      annotations: WRITE,
+    },
+    (args) => {
+      const { connectorId, tier } = args as { connectorId: string; tier: number };
+      return safeHandler(async () => jsonResult(await client.setConnectorTier(connectorId, tier)));
     },
   );
 

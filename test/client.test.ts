@@ -94,6 +94,14 @@ describe("DraftboardClient extended methods", () => {
     expect(fetchImpl.mock.calls[1][1].method).toBe("DELETE");
   });
 
+  it("sets connector tier with PUT and a { tier } body", async () => {
+    const { fetchImpl, client } = mock();
+    await client.setConnectorTier("c1", 3);
+    expect(fetchImpl.mock.calls[0][1].method).toBe("PUT");
+    expect(fetchImpl.mock.calls[0][0]).toContain("/connectors/c1/tier");
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ tier: 3 });
+  });
+
   it("sends a body only for declined intro status", async () => {
     const { fetchImpl, client } = mock();
     await client.setIntroStatus("i1", "requested");
