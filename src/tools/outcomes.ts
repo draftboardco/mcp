@@ -5,6 +5,8 @@ import { fetchAllPages } from "../pagination.js";
 import {
   connectionRank,
   connectionRankDetails,
+  connectionRelationshipDetails,
+  connectionRelationships,
   fullName,
   linkedin,
   normalizeLinkedinUrl,
@@ -30,6 +32,7 @@ export interface FindTopPathsParams {
   maxTargetsScanned?: number;
   connectorsPerTarget?: number;
   includeRankDetails?: boolean;
+  includeRelationships?: boolean;
 }
 
 export async function findTopPaths(client: DraftboardClient, p: FindTopPathsParams) {
@@ -84,6 +87,12 @@ export async function findTopPaths(client: DraftboardClient, p: FindTopPathsPara
       .slice(0, connectorsPerTarget);
 
     for (const c of top) {
+      // The API omits these two keys entirely when empty (they are never `[]`), and empty is the
+      // majority case — so read them defensively and only re-emit them when there is something to
+      // say. An opportunity without them means "no structured signal", not "no relationship".
+      const relationships = p.includeRelationships === false ? [] : connectionRelationships(c);
+      const relationshipDetails =
+        p.includeRelationships === false ? [] : connectionRelationshipDetails(c);
       opportunities.push({
         targetId: t.id,
         target: fullName(t),
@@ -96,6 +105,8 @@ export async function findTopPaths(client: DraftboardClient, p: FindTopPathsPara
         connectorPosition: c.position?.title,
         rank: connectionRank(c),
         ...(p.includeRankDetails !== false ? { rankDetails: connectionRankDetails(c) } : {}),
+        ...(relationships.length ? { relationships } : {}),
+        ...(relationshipDetails.length ? { relationshipDetails } : {}),
         owners: (c.owners ?? []).map((o) => ({ id: o.id, name: fullName(o) })),
       });
     }
@@ -241,7 +252,7 @@ export function registerOutcomeTools(server: McpServer, client: DraftboardClient
     {
       title: "Find top warm-intro paths",
       description:
-        "Find the best warm-introduction opportunities right now. Ranks saved targets by best path rank, then fetches each one's strongest connectors and returns the top intro opportunities (connector → target with shared-history `rankDetails`). Use `ownerIds` for paths through specific teammates, `tagNames`/`statuses`/`accountId`/`title` to scope, `connectorsPerTarget`+`includeRankDetails` for cold-email name-drops. To scope to one company (e.g. \"best intros to my OpenAI targets\"), resolve the company with `list_accounts` and pass its id as `accountId`. EXPENSIVE: walks connections per target — always scope with filters; do not call with no narrowing on large lists. Returns a `telemetry` block describing coverage.",
+        "Find the best warm-introduction opportunities right now. Ranks saved targets by best path rank, then fetches each one's strongest connectors and returns the top intro opportunities (connector → target with shared-history `rankDetails`). Use `ownerIds` for paths through specific teammates, `tagNames`/`statuses`/`accountId`/`title` to scope, `connectorsPerTarget`+`includeRankDetails` for cold-email name-drops. To scope to one company (e.g. \"best intros to my OpenAI targets\"), resolve the company with `list_accounts` and pass its id as `accountId`. An opportunity may also carry `relationships` (how the connector and the target know each other — `current_colleague`, `former_colleague`, `university_classmate`) and `relationshipDetails` (the structured shared company / school / mutual-contact records behind `rankDetails`). BOTH KEYS ARE OMITTED WHEN THERE IS NOTHING TO REPORT, which is the common case: their absence means \"we hold no structured signal for this pair\", NOT \"these two have no relationship\" — never drop or downrank a connector for missing them, and keep reading `rankDetails`. EXPENSIVE: walks connections per target — always scope with filters; do not call with no narrowing on large lists. Returns a `telemetry` block describing coverage.",
       inputSchema: {
         tagNames: z.array(z.string()).optional().describe("Only consider targets with these tags"),
         accountId: z
@@ -269,6 +280,14 @@ export function registerOutcomeTools(server: McpServer, client: DraftboardClient
           .describe("Max targets to fetch connections for (default 25)"),
         connectorsPerTarget: z.number().int().positive().max(10).optional().describe("Top connectors per target (default 3)"),
         includeRankDetails: z.boolean().optional().describe("Include shared-history reasons (default true)"),
+        includeRelationships: z
+          .boolean()
+          .optional()
+          .describe(
+            "Include `relationships` + `relationshipDetails` whenever the API returns any (default true). " +
+              "They are omitted from an opportunity that has none — the common case, and not evidence " +
+              "against that connector.",
+          ),
       },
       annotations: READ_ONLY,
     },

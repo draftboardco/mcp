@@ -34,23 +34,52 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
   server.registerTool(
     "list_supporters",
     {
-      title: "List supporters (closest / preferred connectors)",
+      title: "List supporters (rated / closest connectors)",
       description:
-        "List the customer's supporters — connectors marked as preferred plus the broader non-excluded network. Set `preferred: true` for starred supporters only, `false` for non-starred only, or omit for the full non-excluded list. Narrow by cadence `tiers` (tier 1 = closest / 'ask anytime', tier 5 = do-not-ask) — this is the richer successor to the `preferred` flag. This is how you see 'my closest connections'. Each supporter in the response carries its current `tier` (your personal rating 1..5; absent when unreviewed) — set it with `set_connector_tier`.",
+        "List the customer's supporters — the connectors they have rated, plus the broader visible network. " +
+        "Each supporter carries the caller's personal star `rating`: 1..5 where HIGHER IS BETTER " +
+        "(5 = ★★★★★ 'ask anytime' … 1 = ★ 'don't ask'), absent when unreviewed. `tier` is the same value " +
+        "as the raw wire number, counting DOWN (`rating = 6 - tier`), and ships alongside it. " +
+        "Filter with `ratings` — `[5]` is 'my closest connections'. `tiers` is the equivalent wire-side filter " +
+        "([1] ≡ ratings [5]); the two are UNIONED, not intersected. " +
+        "IMPORTANT: a `rating: 1` ('don't ask') connector is also HIDDEN, so the default listing does not " +
+        "return them — `ratings: [1]` (≡ `tiers: [5]`) is how you list the hidden ones; there is no separate " +
+        "'hidden' flag. Team exception: a connector YOU rated 1 still shows in your default listing while a " +
+        "teammate keeps them visible, carrying your own `rating: 1`. Set a rating with `set_connector_tier`.",
       inputSchema: {
         query: z.string().optional().describe("Search by name"),
         preferred: z
           .boolean()
           .optional()
-          .describe("true = starred/preferred only, false = non-starred only, omit = full network"),
+          .describe(
+            "Legacy star flag (superseded by the rating; `preferred: true` is in practice `rating: 5`). " +
+              "true = starred/preferred only, false = non-starred only, omit = full network.",
+          ),
+        ratings: z
+          .array(z.number().int().min(1).max(5))
+          .optional()
+          .describe(
+            "Filter by star rating 1..5, HIGHER IS BETTER: 5 = closest / 'ask anytime' (★★★★★), " +
+              "1 = 'don't ask' (★). Multi-select, any-of (OR); scoped to your own ratings. " +
+              "For 'my closest connections' use [5] or [4,5]. Asking for [1] also returns the connectors " +
+              "the default listing HIDES — this is the 'Hidden' scope.",
+          ),
+        rating: z
+          .array(z.number().int().min(1).max(5))
+          .optional()
+          .describe(
+            "Alias of `ratings`, spelled the way the HTTP API spells it (`filters[rating][]`). " +
+              "Same values, same behaviour — pass either. Provided so the wire spelling is never " +
+              "silently ignored.",
+          ),
         tiers: z
           .array(z.number().int().min(1).max(5))
           .optional()
           .describe(
-            "Filter by cadence tier 1..5. NOTE the direction: tier 1 = your closest / 'ask anytime' " +
-              "supporters (shown as ★★★★★ / 5★ in the app), ascending to tier 5 = do-not-ask/excluded (1★). " +
-              "Multi-select, any-of (OR); scoped to your own tier assignments; omit for no tier filter. " +
-              "For 'my closest connections' use [1] or [1,2] — NOT [5].",
+            "The same filter on the raw wire scale, which counts DOWN: tier 1 = closest / 'ask anytime' " +
+              "(≡ rating 5), tier 5 = 'don't ask' / hidden (≡ rating 1). Multi-select, any-of (OR), and " +
+              "UNIONED with `ratings` rather than intersected. Prefer `ratings`; use this only when you " +
+              "already hold tier numbers.",
           ),
         pageNumber: z.number().int().positive().optional(),
         resultPerPage: z.number().int().positive().max(100).optional(),
@@ -61,11 +90,19 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
       const a = args as {
         query?: string;
         preferred?: boolean;
+        ratings?: number[];
+        rating?: number[];
         tiers?: number[];
         pageNumber?: number;
         resultPerPage?: number;
       };
-      return safeHandler(async () => jsonResult(await client.getSupporters(a)));
+      // `rating` is the wire spelling, `ratings` the MCP one — accept either and union them,
+      // so the HTTP-doc spelling is never silently dropped by the schema.
+      const { rating, ...rest } = a;
+      const ratings = [...new Set([...(a.ratings ?? []), ...(rating ?? [])])];
+      return safeHandler(async () =>
+        jsonResult(await client.getSupporters({ ...rest, ratings: ratings.length ? ratings : undefined })),
+      );
     },
   );
 
@@ -92,7 +129,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
     {
       title: "Mark/unmark a connector as preferred (WRITE)",
       description:
-        "WRITE. Star (`preferred: true`) or unstar (`preferred: false`) a connector as a preferred supporter for this customer. Preferred connectors are prioritized when ranking warm paths — this is how you 'mark my closest connections'.",
+        "WRITE. Star (`preferred: true`) or unstar (`preferred: false`) a connector as a preferred supporter for this customer. Preferred connectors are prioritized when ranking warm paths. LEGACY: the product has moved on to the star rating, and 97% of the connectors marked preferred also carry the top rating. That is an observation about existing data, NOT an equivalence: `set_connector_tier` does NOT write the `preferred` column, so setting `rating: 5` will not mark someone preferred, and marking them preferred will not give them a rating. Prefer the rating for new work; use this tool only when you specifically need the `preferred` flag itself.",
       inputSchema: {
         connectorId: z.string().describe("Connector UUID (e.g. from a connection's id)"),
         preferred: z.boolean().describe("true = mark preferred, false = unmark"),
@@ -110,7 +147,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
     {
       title: "Mark/unmark a connector as excluded (WRITE)",
       description:
-        "WRITE. Exclude (`excluded: true`) or un-exclude (`excluded: false`) a connector for this customer. Excluded connectors are dropped from warm-path results — this is how you hide connections you'd never ask for an intro.",
+        "WRITE. Exclude (`excluded: true`) or un-exclude (`excluded: false`) a connector for this customer. Excluded connectors are dropped from warm-path results. LEGACY: the product has moved on to the star rating. `rating: 1` ('don't ask') already sets this flag for you, so prefer `set_connector_tier` with `rating: 1` to hide someone. ⚠ The sync runs ONE WAY: writing a rating updates this flag, but `excluded: false` here does NOT clear a `rating: 1` — it leaves the connector rated don't-ask while un-excluded. To un-hide someone cleanly, give them a rating of 2..5 instead of un-excluding.",
       inputSchema: {
         connectorId: z.string().describe("Connector UUID"),
         excluded: z.boolean().describe("true = exclude, false = un-exclude"),
@@ -126,27 +163,74 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
   server.registerTool(
     "set_connector_tier",
     {
-      title: "Set a connector's rating / cadence tier (WRITE)",
+      title: "Rate a connector (set their star rating) (WRITE)",
       description:
-        "WRITE. Set your personal rating (cadence tier) for a connector — the 'star rating' that decides who to reach out to. This is how you 'rate' or 'prioritize' supporters. `tier` 1..5 where 1 = closest / 'ask anytime' (★★★★★, the BEST), 4 = ★★, 5 = 'do not ask' (★, also excludes the connector), 0 = clears the rating. NOTE the inversion: tier 1 is the best, not the worst — for 'my closest' set 1, not 5. The rating is read back on `list_supporters` (each supporter's `tier` field) and filterable there via `tiers`. Personal to the API-key owner.",
+        "WRITE. Set the caller's personal star `rating` for a connector — how readily they'd ask this " +
+        "person for an intro. This is how you 'rate' or 'prioritize' a supporter. `rating` is 1..5 and " +
+        "HIGHER IS BETTER: 5 = ★★★★★ 'ask anytime' (the closest) down to 1 = ★ \"don't ask\", with 4, 3 " +
+        "and 2 in between — and a rating of 1 also HIDES the connector from the default listings. " +
+        "`tier` is the same rating as the raw wire number, counting DOWN (`tier = 6 - rating`), and is " +
+        "still accepted: pass EXACTLY ONE of `rating` (1..5) or `tier` (0..5) — sending both, or neither, " +
+        "is rejected. There is no `rating: 0`: clearing a rating back to unreviewed stays `tier: 0`. " +
+        "Read the rating back on `list_supporters` (each supporter's `rating`) and filter there with " +
+        "`ratings`. Personal to the API-key owner.",
       inputSchema: {
         connectorId: z
           .string()
           .describe("Connector UUID — a connection's `connectorId` (NOT its `id`), or a supporter's `id`"),
+        rating: z
+          .number()
+          .int()
+          .min(1)
+          .max(5)
+          .optional()
+          .describe(
+            "Star rating 1..5, HIGHER IS BETTER: 5 = closest / 'ask anytime' (★★★★★) … 1 = \"don't ask\" (★, " +
+              "also hides the connector). No 0 — to clear a rating send `tier: 0` instead. " +
+              "Pass this OR `tier`, never both.",
+          ),
         tier: z
           .number()
           .int()
           .min(0)
           .max(5)
+          .optional()
           .describe(
-            "Rating 0..5. 1 = closest / 'ask anytime' (best, ★★★★★) … 4 = ★★, 5 = 'do not ask' (★, also excludes), 0 = clear. `tier` counts DOWN — 1 is the best rating.",
+            "The same rating on the raw wire scale, which counts DOWN: 1 = best (≡ rating 5) … " +
+              "5 = \"don't ask\" (≡ rating 1), 0 = clear the rating. Pass this OR `rating`, never both.",
           ),
       },
       annotations: WRITE,
     },
     (args) => {
-      const { connectorId, tier } = args as { connectorId: string; tier: number };
-      return safeHandler(async () => jsonResult(await client.setConnectorTier(connectorId, tier)));
+      const { connectorId, rating, tier } = args as {
+        connectorId: string;
+        rating?: number;
+        tier?: number;
+      };
+      // The endpoint 400s on a body carrying both keys or neither — fail here with a usable message
+      // instead of spending the round trip.
+      const hasRating = rating !== undefined && rating !== null;
+      const hasTier = tier !== undefined && tier !== null;
+      if (hasRating && hasTier) {
+        return Promise.resolve(
+          errorResult(
+            "`rating` and `tier` are the same value spelled two ways — send exactly one. Use `rating` (1..5, higher is better) unless you already hold a tier number.",
+          ),
+        );
+      }
+      if (!hasRating && !hasTier) {
+        return Promise.resolve(
+          errorResult(
+            "Provide a `rating` (1..5, 5 = closest / 'ask anytime', 1 = \"don't ask\") — or `tier` (0..5 on the raw wire scale; `tier: 0` clears the rating).",
+          ),
+        );
+      }
+      return safeHandler(async () =>
+        jsonResult(
+          await client.setConnectorTier(connectorId, hasRating ? { rating } : { tier }),
+        ),
+      );
     },
   );
 
@@ -155,7 +239,7 @@ export function registerExtendedTools(server: McpServer, client: DraftboardClien
     {
       title: "Get intros for a connector (connector-first view)",
       description:
-        "List the intro opportunities where a given connector is the connector — i.e. everyone this person can introduce you to, each with a relationship score and shared-history reasons, plus the team members who can make the ask. Answers 'who can <this person> introduce me to?'.",
+        "List the intro opportunities where a given connector is the connector — i.e. everyone this person can introduce you to, each with a relationship score and shared-history `scoreDetails`, plus the team members who can make the ask. Answers 'who can <this person> introduce me to?'. Each item may also carry `relationships` — how the connector and that target know each other, zero or more of exactly `current_colleague`, `former_colleague`, `university_classmate` — and `relationshipDetails`, the structured records behind `scoreDetails` (one per shared company / school / mutual-contact signal, exactly one of `employment` / `education` / `mutualConnections` set per record, dates ISO yyyy-MM-dd). BOTH KEYS ARE ABSENT WHEN EMPTY (never `[]`) and empty is the common case, so read them as `item.relationships ?? []`: absence means \"we hold no structured signal for this pair\", NOT \"these two have no relationship\" — keep reading `scoreDetails`, which is far more often present than the structured fields (it is the model's own prose), though it too is omitted when there is nothing to say. The two fields are independent: a mutual-contacts-only signal yields a `relationshipDetails` record and NO `relationships` entry, so never derive or index-align one from the other. The response's `connector` object also carries your personal star `rating` (1..5, higher is better; absent when unreviewed).",
       inputSchema: {
         connectorId: z.string().describe("Connector UUID"),
         pageNumber: z.number().int().positive().optional(),

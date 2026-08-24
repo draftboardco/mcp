@@ -1,4 +1,9 @@
-import type { IntegrationConnection, IntegrationTarget, Person } from "./types.js";
+import type {
+  IntegrationConnection,
+  IntegrationTarget,
+  Person,
+  RelationshipDetail,
+} from "./types.js";
 
 /**
  * Tolerant field readers. The current API uses FLAT name fields and `score`/`connectionsNumber`/
@@ -20,6 +25,19 @@ export function connectionRank(c: IntegrationConnection): number {
 
 export function connectionRankDetails(c: IntegrationConnection): string[] {
   return c.scoreDetails ?? c.rankDetails ?? [];
+}
+
+/**
+ * Connector↔target relationship taxonomy. The key is ABSENT when empty (never `[]`), and empty is
+ * the common case — absence means "no structured signal for this pair", not "no relationship".
+ */
+export function connectionRelationships(c: IntegrationConnection): string[] {
+  return c.relationships ?? [];
+}
+
+/** Structured facts behind `scoreDetails`. Same absence semantics as `connectionRelationships`. */
+export function connectionRelationshipDetails(c: IntegrationConnection): RelationshipDetail[] {
+  return c.relationshipDetails ?? [];
 }
 
 /** Full name from flat fields (current) or a nested `profile` (legacy). */

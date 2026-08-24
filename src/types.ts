@@ -5,6 +5,9 @@
  * `score` + `scoreDetails` + `owners`. Older/idealized docs nested these under `profile` and
  * used `maxRank`/`rank`/`rankDetails`; the optional aliases below keep the tools tolerant of
  * either form. All fields are optional so a shape drift never crashes a tool.
+ *
+ * Repeated fields (`relationships`, `relationshipDetails`) are ABSENT when empty — the API omits
+ * an empty array rather than sending `[]` — so every reader must default them with `?? []`.
  */
 
 export interface Profile {
@@ -48,6 +51,52 @@ export interface IntegrationTarget extends Person {
   updatedAt?: string;
 }
 
+/**
+ * How a connector and a target know each other, as data. The API emits only these three values.
+ *
+ * Kept as a documented union rather than the type of `relationships` itself: the wire field stays
+ * `string[]` so an unknown future value can never break a tool.
+ */
+export type RelationshipKind = "current_colleague" | "former_colleague" | "university_classmate";
+
+/** A shared employer. Both overlap dates absent = same company but never at the same time (or `loose`). */
+export interface RelationshipEmployment {
+  company?: string;
+  department?: string;
+  location?: string;
+  /** ISO `yyyy-MM-dd`. Present ⇒ the two were there at the same time. */
+  overlapStartDate?: string;
+  /** ISO `yyyy-MM-dd`. Absent while the overlap is ongoing. */
+  overlapEndDate?: string;
+  /** Low-confidence same-org affiliation; when true the overlap window is omitted on purpose. */
+  loose?: boolean;
+  unit?: string;
+}
+
+/** A shared school. Dates are ISO `yyyy-MM-dd`; both absent when the window is unknown. */
+export interface RelationshipEducation {
+  school?: string;
+  overlapStartDate?: string;
+  overlapEndDate?: string;
+}
+
+/** Shared contacts: how many people both the connector and the target know. */
+export interface RelationshipMutualConnections {
+  count?: number;
+}
+
+/**
+ * One structured relationship signal between the connector and the target — the machine-readable
+ * half of `scoreDetails`. Exactly ONE of `employment` / `education` / `mutualConnections` is set
+ * per record; `score` is that record's contribution to the relationship score.
+ */
+export interface RelationshipDetail {
+  employment?: RelationshipEmployment;
+  education?: RelationshipEducation;
+  mutualConnections?: RelationshipMutualConnections;
+  score?: number;
+}
+
 export interface IntegrationConnection extends Person {
   id: string;
   position?: Position;
@@ -58,8 +107,49 @@ export interface IntegrationConnection extends Person {
   /** Reasons for the score — shared history. (`rankDetails` = legacy alias.) */
   scoreDetails?: string[];
   rankDetails?: string[];
+  /**
+   * Connector↔target relationship taxonomy — zero or more `RelationshipKind` values.
+   *
+   * ABSENT WHEN EMPTY: an empty repeated field is omitted on the wire, so the key is simply not
+   * there — it is never `[]`. Always read it as `c.relationships ?? []`. Empty is the MAJORITY
+   * case (ranks scored before the structured model shipped carry none, and there is no backfill),
+   * so absence means "no structured signal for this pair", NOT "these two have no relationship".
+   * `scoreDetails` stays the authoritative human-readable list.
+   */
+  relationships?: string[];
+  /**
+   * The structured facts behind `scoreDetails` — one record per shared company / school /
+   * mutual-contact signal. Same absence semantics as `relationships` (absent when empty, and empty
+   * is the common case). INDEPENDENT of `relationships`, not a parallel view of it: a
+   * mutual-contacts-only signal produces a record here and no `relationships` entry. Never derive
+   * or index-align one from the other, or from `scoreDetails`.
+   */
+  relationshipDetails?: RelationshipDetail[];
   owners?: Member[];
   connectorId?: string;
+}
+
+/**
+ * A supporter / connector as returned by `GET /supporters` (and as the `connector` on
+ * `GET /connectors/{id}/intros`).
+ */
+export interface IntegrationSupporter extends Person {
+  id: string;
+  position?: Position;
+  headline?: string;
+  /** Relationship strength (0-100) between your team and this supporter. */
+  score?: number;
+  /**
+   * Your personal rating on the product's star scale: 1..5 where HIGHER IS BETTER
+   * (5 = ★★★★★ "ask anytime", 1 = ★ "do not ask"). `rating = 6 - tier`, so the two can never
+   * disagree; absent exactly when `tier` is absent (unreviewed). There is no `rating: 0` —
+   * clearing a rating stays `{"tier": 0}`. Note `rating: 1` also HIDES the connector, so default
+   * listings normally omit it (ask for it with the rating filter).
+   */
+  rating?: number;
+  /** The same value as the raw wire number, counting DOWN: 1 = best … 5 = "do not ask". */
+  tier?: number;
+  createdAt?: string;
 }
 
 export interface IntegrationTag {
@@ -102,6 +192,10 @@ export interface ConnectionsResponse extends PaginatedResponse {
 
 export interface TagsResponse extends PaginatedResponse {
   tags: IntegrationTag[];
+}
+
+export interface SupportersResponse extends PaginatedResponse {
+  supporters: IntegrationSupporter[];
 }
 
 export type TargetStatus = "new" | "completed" | "stopped";

@@ -25,7 +25,7 @@ const target = (id: string, opts: Record<string, unknown> = {}) => ({
   ...opts,
 });
 
-const connection = (id: string, score: number) => ({
+const connection = (id: string, score: number, opts: Record<string, unknown> = {}) => ({
   id,
   firstName: id,
   lastName: "C",
@@ -34,6 +34,9 @@ const connection = (id: string, score: number) => ({
   score,
   scoreDetails: [`worked together (${score})`],
   owners: [{ id: "owner1", firstName: "Me", lastName: "", score: 90 }],
+  // NOTE: no `relationships` / `relationshipDetails` keys by default — the API omits an empty
+  // repeated field entirely, and that is the majority case in production.
+  ...opts,
 });
 
 describe("findTopPaths", () => {
@@ -90,6 +93,97 @@ describe("findTopPaths", () => {
     expect(out.opportunities[0].rank).toBe(65);
     expect(out.opportunities[0].connector).toBe("Zoe Q");
     expect(out.opportunities[0].target).toBe("Xavier Y");
+  });
+
+  it("preserves relationships and relationshipDetails on the opportunity", async () => {
+    // find_top_paths hand-builds each opportunity, so anything not explicitly copied is DROPPED.
+    const client = fakeClient({
+      listTargets: vi.fn(async () => ({
+        status: 200,
+        count: 1,
+        nextPage: 0,
+        targets: [target("acme")],
+      })),
+      getTargetConnections: vi.fn(async () => ({
+        status: 200,
+        nextPage: 0,
+        connections: [
+          connection("alice", 80, {
+            relationships: ["current_colleague", "university_classmate"],
+            relationshipDetails: [
+              {
+                employment: {
+                  company: "Apalon",
+                  department: "Engineering",
+                  location: "Minsk",
+                  overlapStartDate: "2019-03-01",
+                  overlapEndDate: "2021-06-30",
+                  loose: false,
+                  unit: "Mobile",
+                },
+                score: 40,
+              },
+              { education: { school: "BSU", overlapStartDate: "2012-09-01" }, score: 20 },
+              { mutualConnections: { count: 7 }, score: 10 },
+            ],
+          }),
+        ],
+      })),
+    });
+
+    const out = await findTopPaths(client, {});
+    const opp = out.opportunities[0] as Record<string, unknown>;
+    expect(opp.relationships).toEqual(["current_colleague", "university_classmate"]);
+    const details = opp.relationshipDetails as Record<string, unknown>[];
+    expect(details).toHaveLength(3);
+    expect(details[0]).toEqual({
+      employment: {
+        company: "Apalon",
+        department: "Engineering",
+        location: "Minsk",
+        overlapStartDate: "2019-03-01",
+        overlapEndDate: "2021-06-30",
+        loose: false,
+        unit: "Mobile",
+      },
+      score: 40,
+    });
+    // A mutual-connections signal has no `relationships` counterpart — the two are independent.
+    expect(details[2]).toEqual({ mutualConnections: { count: 7 }, score: 10 });
+  });
+
+  it("handles connections where the relationship keys are absent, without emitting undefined", async () => {
+    // The API omits both keys when empty (never `[]`), which is the majority of production ranks.
+    const client = fakeClient({
+      listTargets: vi.fn(async () => ({ status: 200, count: 1, nextPage: 0, targets: [target("acme")] })),
+      getTargetConnections: vi.fn(async () => ({
+        status: 200,
+        nextPage: 0,
+        connections: [connection("bob", 55)],
+      })),
+    });
+
+    const out = await findTopPaths(client, {});
+    const opp = out.opportunities[0] as Record<string, unknown>;
+    expect(opp.rank).toBe(55);
+    // Absent in → absent out: no key, and never a literal `undefined` in the JSON payload.
+    expect("relationships" in opp).toBe(false);
+    expect("relationshipDetails" in opp).toBe(false);
+    expect(JSON.stringify(out)).not.toContain("undefined");
+  });
+
+  it("drops the relationship fields when includeRelationships is false", async () => {
+    const client = fakeClient({
+      listTargets: vi.fn(async () => ({ status: 200, count: 1, nextPage: 0, targets: [target("acme")] })),
+      getTargetConnections: vi.fn(async () => ({
+        status: 200,
+        nextPage: 0,
+        connections: [connection("alice", 80, { relationships: ["former_colleague"] })],
+      })),
+    });
+
+    const out = await findTopPaths(client, { includeRelationships: false });
+    expect("relationships" in (out.opportunities[0] as Record<string, unknown>)).toBe(false);
   });
 
   it("scopes to a company by forwarding accountId to listTargets", async () => {

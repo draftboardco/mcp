@@ -94,12 +94,33 @@ describe("DraftboardClient extended methods", () => {
     expect(fetchImpl.mock.calls[1][1].method).toBe("DELETE");
   });
 
-  it("sets connector tier with PUT and a { tier } body", async () => {
+  it("sets connector tier with PUT and a { tier } body (bare-number call style)", async () => {
     const { fetchImpl, client } = mock();
     await client.setConnectorTier("c1", 3);
     expect(fetchImpl.mock.calls[0][1].method).toBe("PUT");
     expect(fetchImpl.mock.calls[0][0]).toContain("/connectors/c1/tier");
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ tier: 3 });
+  });
+
+  it("sends { rating } for a rating and { tier } for a tier — never both keys", async () => {
+    const { fetchImpl, client } = mock();
+    await client.setConnectorTier("c1", { rating: 5 });
+    await client.setConnectorTier("c1", { tier: 0 });
+    const ratingBody = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    const tierBody = JSON.parse(fetchImpl.mock.calls[1][1].body);
+    // The endpoint 400s on a body carrying both keys, so each call must carry exactly one.
+    expect(ratingBody).toEqual({ rating: 5 });
+    expect(Object.keys(ratingBody)).toEqual(["rating"]);
+    // Clearing a rating stays `{ tier: 0 }` — there is no `rating: 0`.
+    expect(tierBody).toEqual({ tier: 0 });
+    expect(Object.keys(tierBody)).toEqual(["tier"]);
+  });
+
+  it("refuses to send a tier body carrying both rating and tier, or neither", async () => {
+    const { fetchImpl, client } = mock();
+    expect(() => client.setConnectorTier("c1", { rating: 5, tier: 1 })).toThrow(/exactly one/);
+    expect(() => client.setConnectorTier("c1", {})).toThrow(/exactly one/);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("sends a body only for declined intro status", async () => {
@@ -128,6 +149,22 @@ describe("DraftboardClient extended methods", () => {
     // Bracketed repeated form so a single tier still arrives as an array for the gateway DTO.
     expect(url).toContain("filters[tiers][]=1");
     expect(url).toContain("filters[tiers][]=2");
+  });
+
+  it("serializes supporters ratings as bracketed repeated filters[rating][] keys", async () => {
+    const { fetchImpl, client } = mock();
+    // `ratings: [1]` is also the "Hidden" scope — the connectors the default listing drops.
+    await client.getSupporters({ ratings: [5, 1] });
+    const url = decodeURIComponent(fetchImpl.mock.calls[0][0] as string);
+    expect(url).toContain("filters[rating][]=5");
+    expect(url).toContain("filters[rating][]=1");
+  });
+
+  it("omits the ratings key entirely when the array is empty", async () => {
+    const { fetchImpl, client } = mock();
+    await client.getSupporters({ ratings: [] });
+    const url = decodeURIComponent(fetchImpl.mock.calls[0][0] as string);
+    expect(url).not.toContain("filters[rating]");
   });
 
   it("omits the tiers key entirely when the array is empty", async () => {

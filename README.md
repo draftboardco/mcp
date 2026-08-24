@@ -92,18 +92,18 @@ provider (OpenAI / Anthropic) or any third party, and the server never logs the 
 | `list_tags`              | Tags — `manual` (you created) or `automatic` (system batch/date marker), paginated. |
 | `list_targets`           | Saved targets with `maxRank`, `pathsCount`, tags.        |
 | `import_targets`         | Import people as targets by LinkedIn URL.                |
-| `get_target_connections` | Connection paths for a target (`rank`, `rankDetails`).   |
+| `get_target_connections` | Connection paths for a target (`score`/`scoreDetails`, plus `relationships` + `relationshipDetails` — **absent when empty**, and empty is the common case). |
 | `list_accounts`          | Companies with saved targets + per-account reach counts. |
 
 **Extended tools** (rest of the API; ⚠ = changes data, host-approved at runtime):
 
 | Tool                       | What it does                                                       |
 |----------------------------|-------------------------------------------------------------------|
-| `list_supporters`          | Closest / preferred connectors (`preferred: true/false/omit`; `tiers: [1..5]`, tier 1 = closest). |
+| `list_supporters`          | Rated / closest connectors. Each carries your star `rating` (1–5, **higher is better**) and the equivalent `tier`. Filter `ratings: [5]` = closest; `ratings: [1]` = the hidden "don't ask" ones (`tiers: [1..5]` is the same filter on the wire scale, unioned). |
 | `get_connector_intros`     | "Who can this connector introduce me to?" (connector-first view). |
-| `set_connector_preferred` ⚠| Star/unstar a connector as a preferred supporter.                 |
-| `set_connector_excluded` ⚠ | Exclude/un-exclude a connector from warm-path results.            |
-| `set_connector_tier` ⚠     | Rate a connector (personal cadence tier 0–5; 1 = closest / "ask anytime" ★★★★★, 5 = do-not-ask ★, 0 = clear). |
+| `set_connector_preferred` ⚠| Star/unstar a connector as a preferred supporter (**legacy** — in practice `rating: 5`). |
+| `set_connector_excluded` ⚠ | Exclude/un-exclude a connector from warm-path results (**legacy** — equals `rating: 1`). |
+| `set_connector_tier` ⚠     | Rate a connector: `rating` 1–5, **higher is better** (5 = ★★★★★ "ask anytime", 1 = ★ "don't ask", which also hides them). `tier` 0–5 is the same value on the wire scale and still works — send exactly one; `tier: 0` clears. |
 | `import_supporters` ⚠      | Add supporters by LinkedIn URL.                                   |
 | `attach_tags_to_targets` ⚠ | Tag one or many targets (by id/name).                            |
 | `set_intro_status` ⚠       | Move an intro to requested / completed / declined.               |
@@ -122,7 +122,7 @@ provider (OpenAI / Anthropic) or any third party, and the server never logs the 
 
 | Tool                    | What it answers                                                        |
 |-------------------------|-----------------------------------------------------------------------|
-| `find_top_paths`        | "What are my best warm-intro opportunities right now?"                |
+| `find_top_paths`        | "What are my best warm-intro opportunities right now?" (carries `relationships`/`relationshipDetails` when the API has them) |
 | `check_if_connected`    | "Am I already connected to these LinkedIn profiles?"                  |
 | `intro_status_overview` | "How are my intros progressing (new / completed / stopped)?"          |
 

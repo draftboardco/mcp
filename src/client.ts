@@ -1,6 +1,7 @@
 import type {
   ConnectionsResponse,
   MeResponse,
+  SupportersResponse,
   TagsResponse,
   TargetsResponse,
 } from "./types.js";
@@ -211,9 +212,10 @@ export class DraftboardClient {
     query?: string;
     preferred?: boolean;
     tiers?: number[];
+    ratings?: number[];
     pageNumber?: number;
     resultPerPage?: number;
-  }): Promise<unknown> {
+  }): Promise<SupportersResponse> {
     const query: Query = {
       filters: { query: params?.query, preferred: params?.preferred },
       paging: { pageNumber: params?.pageNumber, resultPerPage: params?.resultPerPage },
@@ -226,7 +228,14 @@ export class DraftboardClient {
     if (params?.tiers && params.tiers.length > 0) {
       query["filters[tiers][]"] = params.tiers.map(String);
     }
-    return this.request<unknown>("GET", "/supporters", { query });
+    // Star-rating filter — the same values counted the way the product shows them (rating = 6 - tier,
+    // higher is better). UNIONED with `filters[tiers][]` by the backend, not intersected. Same
+    // bracketed repeated form for the same DTO reason as `tiers` above. `filters[rating][]=1` also
+    // opts into the connectors the default listing hides, so it doubles as the "Hidden" scope.
+    if (params?.ratings && params.ratings.length > 0) {
+      query["filters[rating][]"] = params.ratings.map(String);
+    }
+    return this.request<SupportersResponse>("GET", "/supporters", { query });
   }
 
   importSupporters(body: { linkedinUrls: string[] }): Promise<unknown> {
@@ -245,11 +254,21 @@ export class DraftboardClient {
     return this.request<unknown>(enabled ? "POST" : "DELETE", path);
   }
 
-  // Set the personal cadence tier (rating). tier 0..5: 1 = closest / 'ask anytime',
-  // 5 = do-not-ask (also excludes), 0 = clear the rating. `tier` counts DOWN — 1 is the best rating.
-  setConnectorTier(connectorId: string, tier: number): Promise<unknown> {
+  /**
+   * Set the caller's personal rating for a connector. The endpoint accepts EXACTLY ONE of:
+   * - `rating` 1..5, higher is better (5 = ★★★★★ "ask anytime", 1 = ★ "do not ask"), or
+   * - `tier` 0..5, the raw wire number counting DOWN (`tier = 6 - rating`; 0 clears the rating).
+   *
+   * Sending both, or neither, is a 400 — so exactly one key is put on the body here. A bare number
+   * keeps the original call style (`setConnectorTier(id, 3)` → `{ tier: 3 }`).
+   */
+  setConnectorTier(
+    connectorId: string,
+    value: number | { rating?: number; tier?: number },
+  ): Promise<unknown> {
     const path = `/connectors/${encodeURIComponent(connectorId)}/tier`;
-    return this.request<unknown>("PUT", path, { body: { tier } });
+    const body = connectorTierBody(value);
+    return this.request<unknown>("PUT", path, { body });
   }
 
   getConnectorIntros(
@@ -278,6 +297,29 @@ export class DraftboardClient {
       body: status === "declined" ? (body ?? {}) : undefined,
     });
   }
+}
+
+/**
+ * Pick the single body key for `PUT /connectors/{id}/tier`. The API rejects a body carrying both
+ * `rating` and `tier`, and one carrying neither, so both are refused here rather than sent.
+ */
+function connectorTierBody(value: number | { rating?: number; tier?: number }): {
+  rating?: number;
+  tier?: number;
+} {
+  if (typeof value === "number") return { tier: value };
+  const hasRating = typeof value.rating === "number";
+  const hasTier = typeof value.tier === "number";
+  if (hasRating && hasTier) {
+    throw new DraftboardApiError(
+      "`rating` and `tier` are the same value spelled two ways — pass exactly one, not both.",
+    );
+  }
+  if (hasRating) return { rating: value.rating };
+  if (hasTier) return { tier: value.tier };
+  throw new DraftboardApiError(
+    "Pass exactly one of `rating` (1..5, higher is better) or `tier` (0..5, clears with 0).",
+  );
 }
 
 function friendlyStatus(status: number, path: string): string {
