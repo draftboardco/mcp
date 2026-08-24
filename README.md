@@ -103,7 +103,7 @@ provider (OpenAI / Anthropic) or any third party, and the server never logs the 
 | `get_connector_intros`     | "Who can this connector introduce me to?" (connector-first view). |
 | `set_connector_preferred` ⚠| Star/unstar a connector as a preferred supporter.                 |
 | `set_connector_excluded` ⚠ | Exclude/un-exclude a connector from warm-path results.            |
-| `set_connector_tier` ⚠     | Rate a connector (personal cadence tier 0–5; 1 = closest / "ask anytime" ★★★★, 5 = do-not-ask, 0 = clear). |
+| `set_connector_tier` ⚠     | Rate a connector (personal cadence tier 0–5; 1 = closest / "ask anytime" ★★★★★, 5 = do-not-ask ★, 0 = clear). |
 | `import_supporters` ⚠      | Add supporters by LinkedIn URL.                                   |
 | `attach_tags_to_targets` ⚠ | Tag one or many targets (by id/name).                            |
 | `set_intro_status` ⚠       | Move an intro to requested / completed / declined.               |

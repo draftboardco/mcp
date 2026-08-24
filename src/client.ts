@@ -246,7 +246,7 @@ export class DraftboardClient {
   }
 
   // Set the personal cadence tier (rating). tier 0..5: 1 = closest / 'ask anytime',
-  // 5 = do-not-ask (also excludes), 0 = clear the rating. Lower is better.
+  // 5 = do-not-ask (also excludes), 0 = clear the rating. `tier` counts DOWN — 1 is the best rating.
   setConnectorTier(connectorId: string, tier: number): Promise<unknown> {
     const path = `/connectors/${encodeURIComponent(connectorId)}/tier`;
     return this.request<unknown>("PUT", path, { body: { tier } });
