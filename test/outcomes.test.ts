@@ -35,7 +35,7 @@ const connection = (id: string, score: number, opts: Record<string, unknown> = {
   scoreDetails: [`worked together (${score})`],
   owners: [{ id: "owner1", firstName: "Me", lastName: "", score: 90 }],
   // NOTE: no `relationships` / `relationshipDetails` keys by default — the API omits an empty
-  // repeated field entirely, and that is the majority case in production.
+  // repeated field entirely — the key is simply not in the JSON.
   ...opts,
 });
 
@@ -153,7 +153,7 @@ describe("findTopPaths", () => {
   });
 
   it("handles connections where the relationship keys are absent, without emitting undefined", async () => {
-    // The API omits both keys when empty (never `[]`), which is the majority of production ranks.
+    // The API omits both keys when empty (never `[]`) — the key is not in the JSON at all.
     const client = fakeClient({
       listTargets: vi.fn(async () => ({ status: 200, count: 1, nextPage: 0, targets: [target("acme")] })),
       getTargetConnections: vi.fn(async () => ({

@@ -29,7 +29,7 @@ export function connectionRankDetails(c: IntegrationConnection): string[] {
 
 /**
  * Connector↔target relationship taxonomy. The key is ABSENT when empty (never `[]`), and empty is
- * the common case — absence means "no structured signal for this pair", not "no relationship".
+ * often — absence means "no structured signal for this pair", not "no relationship".
  */
 export function connectionRelationships(c: IntegrationConnection): string[] {
   return c.relationships ?? [];

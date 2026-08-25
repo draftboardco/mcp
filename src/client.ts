@@ -228,8 +228,8 @@ export class DraftboardClient {
     if (params?.tiers && params.tiers.length > 0) {
       query["filters[tiers][]"] = params.tiers.map(String);
     }
-    // Star-rating filter — the same values counted the way the product shows them (rating = 6 - tier,
-    // higher is better). UNIONED with `filters[tiers][]` by the backend, not intersected. Same
+    // Star-rating filter — the values the way the product shows them (1..5, higher is better).
+    // UNIONED with `filters[tiers][]` by the backend, not intersected. Same
     // bracketed repeated form for the same DTO reason as `tiers` above. `filters[rating][]=1` also
     // opts into the connectors the default listing hides, so it doubles as the "Hidden" scope.
     if (params?.ratings && params.ratings.length > 0) {
@@ -257,7 +257,7 @@ export class DraftboardClient {
   /**
    * Set the caller's personal rating for a connector. The endpoint accepts EXACTLY ONE of:
    * - `rating` 1..5, higher is better (5 = ★★★★★ "ask anytime", 1 = ★ "do not ask"), or
-   * - `tier` 0..5, the raw wire number counting DOWN (`tier = 6 - rating`; 0 clears the rating).
+   * - `tier` 0..5, the raw wire number where lower is better (1 = best … 5 = do-not-ask; 0 clears).
    *
    * Sending both, or neither, is a 400 — so exactly one key is put on the body here. A bare number
    * keeps the original call style (`setConnectorTier(id, 3)` → `{ tier: 3 }`).

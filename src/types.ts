@@ -111,16 +111,16 @@ export interface IntegrationConnection extends Person {
    * Connector↔target relationship taxonomy — zero or more `RelationshipKind` values.
    *
    * ABSENT WHEN EMPTY: an empty repeated field is omitted on the wire, so the key is simply not
-   * there — it is never `[]`. Always read it as `c.relationships ?? []`. Empty is the MAJORITY
-   * case (ranks scored before the structured model shipped carry none, and there is no backfill),
-   * so absence means "no structured signal for this pair", NOT "these two have no relationship".
-   * `scoreDetails` stays the authoritative human-readable list.
+   * there — it is never `[]`. Always read it as `c.relationships ?? []`. Present when we hold that
+   * signal for the pair, omitted when we do not — so absence means "no structured signal for this
+   * pair", NOT "these two have no relationship". Promote on the signal, never demote on its
+   * absence. `scoreDetails` carries the human-readable summary.
    */
   relationships?: string[];
   /**
    * The structured facts behind `scoreDetails` — one record per shared company / school /
-   * mutual-contact signal. Same absence semantics as `relationships` (absent when empty, and empty
-   * is the common case). INDEPENDENT of `relationships`, not a parallel view of it: a
+   * mutual-contact signal. Same absence semantics as `relationships` (absent when empty).
+   * INDEPENDENT of `relationships`, not a parallel view of it: a
    * mutual-contacts-only signal produces a record here and no `relationships` entry. Never derive
    * or index-align one from the other, or from `scoreDetails`.
    */
@@ -141,13 +141,16 @@ export interface IntegrationSupporter extends Person {
   score?: number;
   /**
    * Your personal rating on the product's star scale: 1..5 where HIGHER IS BETTER
-   * (5 = ★★★★★ "ask anytime", 1 = ★ "do not ask"). `rating = 6 - tier`, so the two can never
-   * disagree; absent exactly when `tier` is absent (unreviewed). There is no `rating: 0` —
-   * clearing a rating stays `{"tier": 0}`. Note `rating: 1` also HIDES the connector, so default
-   * listings normally omit it (ask for it with the rating filter).
+   * (5 = ★★★★★ "ask anytime", 1 = ★ "do not ask"). Absent when unreviewed. There is no
+   * `rating: 0` — clearing a rating stays `{"tier": 0}`. Note `rating: 1` also HIDES the
+   * connector, so default listings normally omit it (ask for it with the rating filter).
    */
   rating?: number;
-  /** The same value as the raw wire number, counting DOWN: 1 = best … 5 = "do not ask". */
+  /**
+   * The same setting spelled as the raw wire number: 1..5 where LOWER IS BETTER
+   * (tier 1 = "ask anytime" … tier 5 = "do not ask"). Absent when unreviewed. Never written in
+   * stars — the star glyphs belong to `rating`.
+   */
   tier?: number;
   createdAt?: string;
 }

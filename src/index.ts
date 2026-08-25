@@ -13,7 +13,7 @@ async function main(): Promise<void> {
 
   const server = new McpServer({
     name: "draftboard-mcp",
-    version: "1.0.0-alpha.4",
+    version: "1.0.0-alpha.5",
   });
 
   registerThinTools(server, client);

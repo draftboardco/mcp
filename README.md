@@ -92,22 +92,43 @@ provider (OpenAI / Anthropic) or any third party, and the server never logs the 
 | `list_tags`              | Tags — `manual` (you created) or `automatic` (system batch/date marker), paginated. |
 | `list_targets`           | Saved targets with `maxRank`, `pathsCount`, tags.        |
 | `import_targets`         | Import people as targets by LinkedIn URL.                |
-| `get_target_connections` | Connection paths for a target (`score`/`scoreDetails`, plus `relationships` + `relationshipDetails` — **absent when empty**, and empty is the common case). |
+| `get_target_connections` | Connection paths for a target (`score`/`scoreDetails`, plus `relationships` + `relationshipDetails` — **absent when empty**). |
 | `list_accounts`          | Companies with saved targets + per-account reach counts. |
 
 **Extended tools** (rest of the API; ⚠ = changes data, host-approved at runtime):
 
 | Tool                       | What it does                                                       |
 |----------------------------|-------------------------------------------------------------------|
-| `list_supporters`          | Rated / closest connectors. Each carries your star `rating` (1–5, **higher is better**) and the equivalent `tier`. Filter `ratings: [5]` = closest; `ratings: [1]` = the hidden "don't ask" ones (`tiers: [1..5]` is the same filter on the wire scale, unioned). |
+| `set_connector_tier` ⚠     | **Set the stars.** Rate a connector: `rating` 1–5, **higher is better** (5 = ★★★★★ "ask anytime", 1 = ★ "don't ask", which also hides them). `tier` 0–5 is the same setting on the raw wire scale, where lower is better, and still works — send exactly one; `tier: 0` clears. |
+| `list_supporters`          | **Search by the stars.** Rated / closest connectors. Each carries your star `rating` (1–5, **higher is better**) and `tier`, the same setting on the wire scale. Filter `ratings: [5]` = closest; `ratings: [1]` = the hidden "don't ask" ones (`tiers` is the same filter on the wire scale, unioned). |
 | `get_connector_intros`     | "Who can this connector introduce me to?" (connector-first view). |
-| `set_connector_preferred` ⚠| Star/unstar a connector as a preferred supporter (**legacy** — in practice `rating: 5`). |
-| `set_connector_excluded` ⚠ | Exclude/un-exclude a connector from warm-path results (**legacy** — equals `rating: 1`). |
-| `set_connector_tier` ⚠     | Rate a connector: `rating` 1–5, **higher is better** (5 = ★★★★★ "ask anytime", 1 = ★ "don't ask", which also hides them). `tier` 0–5 is the same value on the wire scale and still works — send exactly one; `tier: 0` clears. |
 | `import_supporters` ⚠      | Add supporters by LinkedIn URL.                                   |
 | `attach_tags_to_targets` ⚠ | Tag one or many targets (by id/name).                            |
 | `set_intro_status` ⚠       | Move an intro to requested / completed / declined.               |
 | `archive_target` ⚠        | Soft-delete a target (**not reversible** via the API).           |
+
+**Stars = the `rating`, and nothing else.** The star glyphs describe the `rating` only. `tier` is
+the raw wire spelling of the same setting (1–5, **lower** is better) and never carries them, and
+the legacy `preferred` flag below is a separate boolean, not a rating at all.
+
+Four capabilities, kept separate:
+
+| Intent | Call |
+|--------|------|
+| Set a rating ("star this person", "rate them 5") | `set_connector_tier` with `rating` (`tier: 0` clears) |
+| Search by rating ("my starred connections", "who did I rate 5") | `list_supporters` with `ratings` |
+| *(legacy)* set preferred | `set_connector_preferred` |
+| *(legacy)* search by preferred | `list_supporters` with `preferred` |
+
+**Legacy toggles** (⚠ still wired, still work — the product moved both onto the rating, so prefer
+`set_connector_tier` for new work):
+
+- `set_connector_preferred` — mark/unmark a connector as a preferred supporter. `preferred` is its
+  own boolean column and **not** the rating: `set_connector_tier` never writes it, so `rating: 5`
+  does not mark someone preferred, and marking someone preferred does not give them a rating.
+- `set_connector_excluded` — exclude/un-exclude a connector from warm-path results. `rating: 1` hides
+  a connector and sets this flag for you, but the sync runs **one way**: `excluded: false` does *not*
+  clear a `rating: 1`. To un-hide someone, give them a `rating` of 2–5.
 
 **Prospecting tools** (company-first discovery — ⚠ BETA · Team/Enterprise · async):
 
