@@ -47,7 +47,7 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
     {
       title: "List targets",
       description:
-        "List the customer's saved targets (leads) with status, best path rank (`maxRank`), path count (`pathsCount`), and tags. Filter by tag, status, update time, **company** (`accountId`), or **title/position** (`title`). To scope to a company, first resolve its name to an id with `list_accounts` (company search), then pass that id as `accountId` here — far cheaper than paging the whole target list. Paginated — loop pages until `nextPage` is 0.",
+        "List the customer's saved targets (leads) with status, best path rank (`maxRank`), path count (`pathsCount`), and tags. Returns only targets that ALREADY have at least one warm-intro path — a saved target still being indexed will not appear here (use `resolve_target` for those). Filter by tag, status, update time, **company** (`accountId`), or **title/position** (`title`). To scope to a company, first resolve its name to an id with `list_accounts` (company search), then pass that id as `accountId` here — far cheaper than paging the whole target list. To find ONE named person, use `resolve_target`, never a page walk. Paginated — loop pages until `nextPage` is 0.",
       inputSchema: {
         updatedSince: z.string().optional().describe("ISO 8601 timestamp filter"),
         tagIds: z.array(z.string()).optional(),
@@ -68,6 +68,36 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
     },
     (args) =>
       safeHandler(async () => jsonResult(await client.listTargets(args as Query))),
+  );
+
+  server.registerTool(
+    "resolve_target",
+    {
+      title: "Resolve a LinkedIn URL to one of my targets",
+      description:
+        "Look up ONE person by their LinkedIn profile URL and get back that target (with its `id` for the id-scoped tools), or `found: false` if they are not one of your targets. Use this for any question about a single named person — \"is X already a target\", \"what's X's target id\", \"do I have paths to X\" (resolve, then `get_target_connections`). Do NOT page `list_targets` looking for someone: on a large book that is dozens of slow requests and can stop before reaching them. Unlike `list_targets` (which returns only targets that already have a warm-intro path), this finds ANY of your non-archived targets — including one imported moments ago whose paths are still being computed, so it is also how you get the id straight after `import_targets`. `found: false` is a normal answer, not an error.",
+      inputSchema: {
+        linkedinUrl: z
+          .string()
+          .url()
+          .describe("The person's LinkedIn profile URL, e.g. https://www.linkedin.com/in/janedoe/"),
+      },
+      annotations: READ_ONLY,
+    },
+    (args) =>
+      safeHandler(async () => {
+        const { linkedinUrl } = args as { linkedinUrl: string };
+        const target = await client.resolveTarget(linkedinUrl);
+        return jsonResult(
+          target
+            ? { found: true, target }
+            : {
+                found: false,
+                linkedinUrl,
+                note: "Not one of your targets. Use `import_targets` to save them, then resolve again for the id.",
+              },
+        );
+      }),
   );
 
   server.registerTool(

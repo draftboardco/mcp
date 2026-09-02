@@ -1,6 +1,9 @@
+import { canonicalLinkedinUrl } from "./normalize.js";
 import type {
   ConnectionsResponse,
+  IntegrationTarget,
   MeResponse,
+  ResolveTargetResponse,
   SupportersResponse,
   TagsResponse,
   TargetsResponse,
@@ -148,6 +151,29 @@ export class DraftboardClient {
 
   listTargets(query?: Query): Promise<TargetsResponse> {
     return this.request<TargetsResponse>("GET", "/targets", { query });
+  }
+
+  /**
+   * Resolve a LinkedIn profile URL to the caller's single matching target, or `null` when there
+   * is none. Prefer this over paging `listTargets` for any question about ONE named person: it is
+   * a direct lookup, and it finds ANY non-archived target — including one imported moments ago
+   * that has no warm-intro paths yet, which `listTargets` does not return at all.
+   *
+   * A 404 means "not one of your targets", which is an answer, not a failure — it comes back as
+   * `null`. Every other non-2xx (400 on a malformed URL, 401, 429, 5xx) still throws.
+   */
+  async resolveTarget(linkedinUrl: string): Promise<IntegrationTarget | null> {
+    try {
+      const res = await this.request<ResolveTargetResponse>("GET", "/targets/resolve", {
+        // Canonicalised: the endpoint's URL validator is case-sensitive, so `LinkedIn.com/In/…`
+        // would 400 even though it is a valid profile URL.
+        query: { linkedinUrl: canonicalLinkedinUrl(linkedinUrl) },
+      });
+      return res.target ?? null;
+    } catch (err) {
+      if (err instanceof DraftboardApiError && err.status === 404) return null;
+      throw err;
+    }
   }
 
   importTargets(body: { linkedinUrls: string[]; tags?: string[] }): Promise<unknown> {

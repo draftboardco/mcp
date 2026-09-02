@@ -9,7 +9,6 @@ import {
   connectionRelationships,
   fullName,
   linkedin,
-  normalizeLinkedinUrl,
   targetMaxRank,
   targetPathsCount,
 } from "../normalize.js";
@@ -137,76 +136,181 @@ export async function findTopPaths(client: DraftboardClient, p: FindTopPathsPara
 
 // ---------- check_if_connected ----------
 
+/** Lookups in flight at once. Small: the read rate limit is 50/min per customer. */
+const RESOLVE_CONCURRENCY = 4;
+
 export interface CheckIfConnectedParams {
   linkedinUrls: string[];
   importIfMissing?: boolean;
   tags?: string[];
 }
 
+/** One URL and what the direct lookup said about it. */
+interface ResolvedUrl {
+  url: string;
+  target: IntegrationTarget | null;
+  /** The lookup itself errored. NOT the same as "no such target" — never import over this. */
+  failed?: boolean;
+  /** We asked the API to import this URL. Still unresolved => the async import has not landed yet. */
+  importAttempted?: boolean;
+}
+
+/** Run `fn` over `items` with at most `limit` in flight, preserving input order. */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
 export async function checkIfConnected(client: DraftboardClient, p: CheckIfConnectedParams) {
   const warnings: string[] = [];
-  if (p.importIfMissing !== false) {
+
+  // One direct lookup per URL. Deliberately NOT a walk over `listTargets`: that costs a page
+  // request per 100 targets AND silently stops after the first N, so on a large book it reports
+  // "not a target" for people who are.
+  const resolveOne = async (url: string): Promise<ResolvedUrl> => {
     try {
-      await client.importTargets({ linkedinUrls: p.linkedinUrls, tags: p.tags });
+      return { url, target: await client.resolveTarget(url) };
+    } catch (err) {
+      warnings.push(`Could not look up ${url}: ${(err as Error).message}`);
+      return { url, target: null, failed: true };
+    }
+  };
+
+  const resolved = await mapWithConcurrency(p.linkedinUrls, RESOLVE_CONCURRENCY, resolveOne);
+
+  // Import ONLY what is genuinely missing — not the ones already saved (that would re-import
+  // them and spawn an import campaign every call), and not the ones whose lookup errored (a
+  // failed lookup is not evidence of absence).
+  const missing = resolved.filter((r) => !r.target && !r.failed);
+  let importRequested = 0;
+  let afterImport: ResolvedUrl[] = resolved;
+
+  if (p.importIfMissing !== false && missing.length > 0) {
+    try {
+      await client.importTargets({ linkedinUrls: missing.map((r) => r.url), tags: p.tags });
     } catch (err) {
       warnings.push(`Import step failed (continuing with existing targets): ${(err as Error).message}`);
     }
+    // Re-check the missing ones REGARDLESS of whether the import call reported an error: a partial
+    // failure still persists some people, and the resolver is the only thing that knows which.
+    //
+    // This is a best-effort recheck, NOT a guarantee: intro-svc processes an import batch
+    // fire-and-forget (import.service.ts, "Fire-and-forget: first batch processed async, rest by
+    // cron"), so `POST /targets/import` routinely returns before the row exists. A URL that still
+    // does not resolve here is reported as `import_pending` — never as `not_a_target`, which would
+    // be a wrong answer about someone we just saved.
+    const rechecked = new Map(
+      (await mapWithConcurrency(missing, RESOLVE_CONCURRENCY, (r) => resolveOne(r.url))).map((r) => [
+        r.url,
+        r,
+      ]),
+    );
+    afterImport = resolved.map((r) =>
+      r.target ? r : { ...(rechecked.get(r.url) ?? r), importAttempted: true },
+    );
+    importRequested = missing.length;
   }
 
-  const targetsPage = await fetchAllPages(
-    (pageNumber) => client.listTargets({ pageNumber, resultPerPage: 100 }),
-    (r) => r.targets ?? [],
-    { maxItems: 1000, maxPages: 20 },
-  );
-
-  const byUrl = new Map<string, IntegrationTarget>();
-  for (const t of targetsPage.items) {
-    const key = normalizeLinkedinUrl(linkedin(t));
-    if (key) byUrl.set(key, t);
-  }
-
-  const results = [];
-  for (const url of p.linkedinUrls) {
-    const t = byUrl.get(normalizeLinkedinUrl(url));
-    if (!t) {
-      results.push({
-        linkedinUrl: url,
+  const results = await mapWithConcurrency(afterImport, RESOLVE_CONCURRENCY, async (r) => {
+    // A lookup that ERRORED is not a "no". Reporting `isTarget: false` here would hand a caller a
+    // definitive negative we never established — so the booleans are null and the status says why.
+    if (r.failed) {
+      return {
+        linkedinUrl: r.url,
+        status: "lookup_failed" as const,
+        isTarget: null,
+        hasPaths: null,
+        note: "Lookup failed — see warnings. This is NOT a confirmed 'not a target'; retry before acting on it.",
+      };
+    }
+    if (!r.target && r.importAttempted) {
+      return {
+        linkedinUrl: r.url,
+        status: "import_pending" as const,
+        isTarget: null,
+        hasPaths: null,
+        note: "Import accepted but not visible yet — Draftboard processes an import batch asynchronously. Re-check in a few moments; do not report this person as missing.",
+      };
+    }
+    if (!r.target) {
+      return {
+        linkedinUrl: r.url,
+        status: "not_a_target" as const,
         isTarget: false,
         hasPaths: false,
-        note: "Not found as a target yet. Import/enrichment may still be in progress — re-check shortly.",
-      });
-      continue;
+        note: "Not one of your targets. Pass `importIfMissing: true` to save them.",
+      };
     }
-    const pathsCount = targetPathsCount(t);
+    const t = r.target;
+    // `targetPathsCount` reads 0 for an ABSENT field as well as a real zero. Keep the two apart:
+    // undefined means "the target did not say", and then the connections response is the authority.
+    const reportsPathCount = t.connectionsNumber !== undefined || t.pathsCount !== undefined;
+    let pathsCount = reportsPathCount ? targetPathsCount(t) : undefined;
     let topConnector: string | undefined;
     let topRank = targetMaxRank(t);
-    try {
-      const resp = await client.getTargetConnections(t.id, { pageNumber: 1, resultPerPage: 5 });
-      const conns = (resp.connections ?? []).sort((a, b) => connectionRank(b) - connectionRank(a));
-      if (conns[0]) {
-        topConnector = fullName(conns[0]);
-        topRank = connectionRank(conns[0]);
+    /** Set when the target reported no count and we had to read the connections page ourselves. */
+    let sawConnections: boolean | undefined;
+    // Skip the extra request only when the target EXPLICITLY reported zero paths (common right
+    // after an import) — never on an absent field, which would silently drop real connectors.
+    if (pathsCount === undefined || pathsCount > 0) {
+      try {
+        const resp = await client.getTargetConnections(t.id, { pageNumber: 1, resultPerPage: 5 });
+        const conns = (resp.connections ?? []).sort((a, b) => connectionRank(b) - connectionRank(a));
+        if (conns[0]) {
+          topConnector = fullName(conns[0]);
+          topRank = connectionRank(conns[0]);
+        }
+        // The target did not report a count — take the total from the response so we can never
+        // claim `hasPaths: false` while returning a connector. `conns.length` is only the TOTAL
+        // when this page is the last one; otherwise the count stays unknown rather than wrong.
+        if (pathsCount === undefined) {
+          if (typeof resp.count === "number") pathsCount = resp.count;
+          else if (!resp.nextPage) pathsCount = conns.length;
+          sawConnections = conns.length > 0;
+        }
+      } catch (err) {
+        warnings.push(`Could not fetch connections for ${r.url}: ${(err as Error).message}`);
       }
-    } catch (err) {
-      warnings.push(`Could not fetch connections for ${url}: ${(err as Error).message}`);
     }
-    results.push({
-      linkedinUrl: url,
+    return {
+      linkedinUrl: r.url,
+      status: "target" as const,
       isTarget: true,
       targetId: t.id,
       // "1st" degree = directly connected already.
       degree: t.degree,
       directlyConnected: t.degree === "1st",
-      hasPaths: pathsCount > 0,
+      // `hasPaths` is answerable even when the exact count is not: seeing one connector is proof
+      // of a path. Only when we have neither a count nor a page does it stay null (never a false
+      // "no", which is the failure mode this whole tool exists to avoid).
+      hasPaths: pathsCount !== undefined ? pathsCount > 0 : (sawConnections ?? null),
       pathsCount,
       topConnector,
       topRank,
-    });
-  }
+    };
+  });
 
   return {
     results,
-    telemetry: { checked: p.linkedinUrls.length, targetsScanned: targetsPage.items.length, truncated: targetsPage.truncated },
+    telemetry: {
+      checked: p.linkedinUrls.length,
+      resolved: afterImport.filter((r) => r.target).length,
+      importRequested,
+      importPending: afterImport.filter((r) => r.importAttempted && !r.target).length,
+    },
     ...(warnings.length ? { warnings } : {}),
   };
 }
@@ -299,9 +403,15 @@ export function registerOutcomeTools(server: McpServer, client: DraftboardClient
     {
       title: "Check if already connected to people",
       description:
-        "Given LinkedIn profile URLs, report whether the customer already has warm paths to each person. By default imports any that are not yet targets, then returns per-URL `{hasPaths, pathsCount, topConnector, topRank}`. Newly imported people may need enrichment before paths appear.",
+        "Given LinkedIn profile URLs, report whether the customer already has warm paths to each person. Looks each URL up directly (one request per person, any book size), then returns per-URL `{status, isTarget, targetId, hasPaths, pathsCount, topConnector, topRank, degree, directlyConnected}`. `status` is `target`, `not_a_target`, `import_pending`, or `lookup_failed`. On `import_pending` and `lookup_failed` the booleans are `null`, NOT false — the answer is unknown, so never tell the user they have no path on the strength of it; re-check instead. By default it imports only the URLs that are not targets yet; Draftboard processes an import batch asynchronously, so those usually come back `import_pending` on this call and resolve moments later. For a SINGLE person where you only need the id or a yes/no, `resolve_target` is one call instead of two.",
       inputSchema: {
-        linkedinUrls: z.array(z.string().url()).min(1).describe("LinkedIn profile URLs to check"),
+        linkedinUrls: z
+          .array(z.string().url())
+          .min(1)
+          .max(10)
+          .describe(
+            "LinkedIn profile URLs to check (max 10 per call — each costs up to three API reads and the account is limited to 50 reads/minute, so a full batch still leaves headroom; split larger lists across calls)",
+          ),
         importIfMissing: z.boolean().optional().describe("Import URLs that are not yet targets (default true)"),
         tags: z.array(z.string()).optional().describe("Tags to apply to any imported targets"),
       },

@@ -189,6 +189,17 @@ export interface TargetsResponse extends PaginatedResponse {
   targets: IntegrationTarget[];
 }
 
+/**
+ * `GET /targets/resolve`. Not paginated: it answers an identity question — "which of my targets is
+ * this LinkedIn URL?" — with at most one target. A 404 (no match) is a normal answer, so the client
+ * turns it into `null` rather than an error.
+ */
+export interface ResolveTargetResponse {
+  status?: number;
+  /** Present on a 2xx; the target is absent on the 404, which the client turns into `null`. */
+  target?: IntegrationTarget;
+}
+
 export interface ConnectionsResponse extends PaginatedResponse {
   connections: IntegrationConnection[];
 }

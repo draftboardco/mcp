@@ -262,3 +262,42 @@ describe("fetchAllPages", () => {
     expect(result.truncated).toBe(true);
   });
 });
+
+describe("DraftboardClient.resolveTarget", () => {
+  function mock(response: Response) {
+    const fetchImpl = vi.fn(async () => response);
+    return { fetchImpl, client: new DraftboardClient({ apiKey: "k", fetchImpl }) };
+  }
+
+  it("url-encodes the profile url and returns the target", async () => {
+    const { fetchImpl, client } = mock(
+      jsonResponse({ status: 200, errors: [], target: { id: "t1", firstName: "Jane" } }),
+    );
+    const target = await client.resolveTarget("https://www.linkedin.com/in/jane doe/");
+    expect(target).toMatchObject({ id: "t1" });
+    const url = fetchImpl.mock.calls[0][0] as string;
+    expect(url).toContain("/targets/resolve?linkedinUrl=");
+    // buildQuery must encode the whole URL, not splice it into the query raw.
+    expect(url).not.toContain("linkedinUrl=https://");
+  });
+
+  it("lowercases the host and /in/ segment — the API validator is case-sensitive", async () => {
+    const { fetchImpl, client } = mock(jsonResponse({ status: 200, target: { id: "t1" } }));
+    await client.resolveTarget("http://LinkedIn.com/In/Jane-Doe/");
+    const sent = decodeURIComponent((fetchImpl.mock.calls[0][0] as string).split("linkedinUrl=")[1]);
+    // Verified against the live API: `LinkedIn.com/In/` returns 400, `linkedin.com/in/` returns 200.
+    expect(sent).toBe("http://linkedin.com/in/Jane-Doe/");
+  });
+
+  it("returns null on 404 — 'not a target' is an answer, not an error", async () => {
+    const { client } = mock(jsonResponse({ status: 404, errors: ["Target not found"] }, 404));
+    await expect(client.resolveTarget("https://www.linkedin.com/in/nobody/")).resolves.toBeNull();
+  });
+
+  it("still throws on a 400 (malformed url) so the caller sees the mistake", async () => {
+    const { client } = mock(jsonResponse({ status: 400, errors: ["Invalid"] }, 400));
+    await expect(client.resolveTarget("not-a-linkedin-url")).rejects.toBeInstanceOf(
+      DraftboardApiError,
+    );
+  });
+});

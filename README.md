@@ -90,7 +90,8 @@ provider (OpenAI / Anthropic) or any third party, and the server never logs the 
 |--------------------------|----------------------------------------------------------|
 | `get_me`                 | Authenticated customer + team members.                   |
 | `list_tags`              | Tags — `manual` (you created) or `automatic` (system batch/date marker), paginated. |
-| `list_targets`           | Saved targets with `maxRank`, `pathsCount`, tags.        |
+| `list_targets`           | Saved targets with `maxRank`, `pathsCount`, tags. Only targets that **already have a path** — paginated. |
+| `resolve_target`         | One LinkedIn URL → that target (with its `id`), or `found: false`. Finds **any** saved target, path or not. |
 | `import_targets`         | Import people as targets by LinkedIn URL.                |
 | `get_target_connections` | Connection paths for a target (`score`/`scoreDetails`, plus `relationships` + `relationshipDetails` — **absent when empty**). |
 | `list_accounts`          | Companies with saved targets + per-account reach counts. |
@@ -150,6 +151,11 @@ Four capabilities, kept separate:
 Outcome tools that walk connections are bounded and return a `telemetry` block
 (`targetsMatched`, `targetsScanned`, `connectionsFetched`, `truncated`, `nextSuggestedFilter`) so
 you always know the coverage of an answer. Scope them with filters before running on large lists.
+
+**Finding one person:** use `resolve_target` (or `check_if_connected` for a batch). Both look each
+URL up directly, so they answer in about a second on a book of any size. Never page `list_targets`
+hunting for someone — that is one request per 100 targets, and `list_targets` does not return
+targets whose paths have not been computed yet, so they would look missing when they are not.
 
 ## Setup (for your assistant)
 

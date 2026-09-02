@@ -54,6 +54,19 @@ export function linkedin(p?: Person): string | undefined {
   return p.linkedinUrl ?? p.profile?.linkedinUrl;
 }
 
+/**
+ * Canonicalise a LinkedIn profile URL for the API.
+ *
+ * `GET /targets/resolve` validates with a CASE-SENSITIVE `/linkedin\.com\/in\//` regex, so a
+ * perfectly valid `http://LinkedIn.com/In/jane` is rejected with a 400 (verified against the live
+ * API). Lowercase everything up to and including the `/in/` segment; the vanity slug after it is
+ * matched case-insensitively server-side, so leave it untouched. A non-LinkedIn string is returned
+ * unchanged — the server should be the one to reject it.
+ */
+export function canonicalLinkedinUrl(url: string): string {
+  return url.trim().replace(/^.*?linkedin\.com\/in\//i, (prefix) => prefix.toLowerCase());
+}
+
 export function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
