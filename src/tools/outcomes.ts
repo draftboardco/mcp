@@ -242,7 +242,11 @@ export async function checkIfConnected(client: DraftboardClient, p: CheckIfConne
         status: "import_pending" as const,
         isTarget: null,
         hasPaths: null,
-        note: "Import accepted but not visible yet — Draftboard processes an import batch asynchronously. Re-check in a few moments; do not report this person as missing.",
+        note: "Import accepted but not visible yet — Draftboard processes an import batch asynchronously. Re-check with `resolve_target`; do not report this person as missing.",
+        // "asynchronous" alone reads as "a second or two" and sends an agent back too early, which
+        // is how a good import gets reported as a failure. Observed on a real account: the row
+        // landed 6-23s after the import responded, its paths 14 minutes later.
+        recheckAfterSeconds: 30,
       };
     }
     if (!r.target) {

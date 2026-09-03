@@ -423,6 +423,10 @@ describe("checkIfConnected", () => {
       hasPaths: null,
     });
     expect(out.telemetry).toMatchObject({ importRequested: 1, importPending: 1 });
+    // "asynchronous" alone sends an agent back after a second and it reports a good import as
+    // failed. The result has to carry how long to wait and what to call.
+    expect(out.results[0]).toMatchObject({ recheckAfterSeconds: 30 });
+    expect(out.results[0].note).toContain("resolve_target");
   });
 
   it("does not present one connections page as the total path count", async () => {

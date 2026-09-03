@@ -105,7 +105,9 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
     {
       title: "Import targets by LinkedIn URL",
       description:
-        "Import one or more people as targets from their LinkedIn profile URLs, optionally tagging them. Tags are created if they do not exist. Enrichment and path scoring happen asynchronously, so paths may not be available immediately after import.",
+        "Import one or more people as targets from their LinkedIn profile URLs, optionally tagging them. Tags are created if they do not exist. " +
+        "A success response means the batch was ACCEPTED, not finished, and there are TWO separate waits: the target rows appear within about half a minute, and their warm-intro paths are computed after that \u2014 minutes, and longer on a large network (14 minutes on a real account). " +
+        "To confirm a specific person landed, call `resolve_target` with the same URL: it returns the target as soon as the row exists, before any path. Do NOT confirm with `list_targets` (by tag, `updatedSince` or anything else) \u2014 it only returns targets that already have a path, so an empty result there is never evidence the import failed. Then poll `get_target_connections` for the paths.",
       inputSchema: {
         linkedinUrls: z
           .array(z.string().url())
@@ -116,11 +118,20 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
       annotations: WRITE,
     },
     (args) =>
-      safeHandler(async () =>
-        jsonResult(
-          await client.importTargets(args as { linkedinUrls: string[]; tags?: string[] }),
-        ),
-      ),
+      safeHandler(async () => {
+        const params = args as { linkedinUrls: string[]; tags?: string[] };
+        const result = (await client.importTargets(params)) as Record<string, unknown>;
+        // The raw API result says `imported: N` and nothing about what to do next, which reads as
+        // "done". It is not: a customer's assistant took that at face value, checked with
+        // `list_targets`, got nothing, and escalated a perfectly good import as lost data. The
+        // next step travels with the result so an agent that never loaded the skill still learns it.
+        return jsonResult({
+          ...result,
+          note: "Accepted, not finished. Confirm a specific person with `resolve_target` (the row appears within ~30s), NOT with `list_targets` — that only returns targets which already have a path, so an empty result there does not mean the import failed. Warm-intro paths take minutes to compute (14 minutes on a large network); poll `get_target_connections` for them.",
+          confirmWith: { tool: "resolve_target", recheckAfterSeconds: 30 },
+          pathsWith: { tool: "get_target_connections", expect: "minutes, not seconds" },
+        });
+      }),
   );
 
   server.registerTool(
