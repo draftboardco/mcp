@@ -1,5 +1,41 @@
 # @draftboard/mcp
 
+> ## ⚠️ Superseded — use the hosted server instead
+>
+> **Draftboard now runs the MCP server for you at `https://mcp.draftboard.com`.** No install, no
+> Node, no API key in a config file — you approve it in the browser like any other connected app,
+> and it stays up to date on its own. Setup for every client: **<https://www.draftboard.com/mcp>**
+>
+> **This package still works.** Nothing here has been switched off and nothing is about to break,
+> so there is no rush — but it will not get new tools, and it is no longer what we point people at.
+>
+> ### Moving
+>
+> ```bash
+> # Claude Code
+> claude mcp add --transport http draftboard https://mcp.draftboard.com
+> claude mcp login draftboard
+>
+> # Codex CLI
+> codex mcp add draftboard --url https://mcp.draftboard.com
+> codex mcp login draftboard
+> ```
+>
+> **Claude Desktop:** Settings → Connectors → Add → Add custom connector → `https://mcp.draftboard.com`
+>
+> Then remove the old `draftboard` entry from your MCP config, and delete the API key you created
+> for it (Settings → API keys) — the hosted connection issues and revokes its own.
+>
+> ### One difference worth knowing before you move
+>
+> The hosted server is approved **in a browser** instead of reading `DRAFTBOARD_API_KEY` from the
+> environment. That means you have to be signed in to Draftboard in a browser on the machine doing
+> the approving. **If you run this headlessly — CI, a server, a container with no browser — stay
+> here for now**; that case is not yet covered.
+>
+> The tools are the same. Both surfaces expose the identical set, checked by a test that compares
+> them, so moving is not a trade-off in what your assistant can do.
+
 A [Model Context Protocol](https://modelcontextprotocol.io) server for the **Draftboard
 Integration API**. It lets any MCP-capable agent (Claude, Codex, etc.) work with your Draftboard
 warm-introduction data — targets, connection paths, ranks, and tags — to answer questions like
