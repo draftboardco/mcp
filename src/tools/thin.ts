@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DraftboardClient, Query } from "../client.js";
+import { tagMatchSchema } from "./outcomes.js";
 import { READ_ONLY, WRITE, jsonResult, safeHandler } from "./util.js";
 
 /**
@@ -52,6 +53,7 @@ export function registerThinTools(server: McpServer, client: DraftboardClient): 
         updatedSince: z.string().optional().describe("ISO 8601 timestamp filter"),
         tagIds: z.array(z.string()).optional(),
         tagNames: z.array(z.string()).optional(),
+        tagMatch: tagMatchSchema,
         statuses: z.array(z.enum(["new", "completed", "stopped"])).optional(),
         accountId: z
           .string()

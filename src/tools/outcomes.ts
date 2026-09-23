@@ -17,10 +17,16 @@ import { READ_ONLY, WRITE, jsonResult, safeHandler } from "./util.js";
 
 const TARGETS_FETCH_CAP = 200;
 
+export const tagMatchSchema = z
+  .enum(["any", "all"])
+  .optional()
+  .describe('How several tags combine: "any" = at least one, "all" = every one. Default "all".');
+
 // ---------- find_top_paths ----------
 
 export interface FindTopPathsParams {
   tagNames?: string[];
+  tagMatch?: "any" | "all";
   accountId?: string;
   title?: string;
   ownerIds?: string[];
@@ -44,6 +50,7 @@ export async function findTopPaths(client: DraftboardClient, p: FindTopPathsPara
     (pageNumber) =>
       client.listTargets({
         tagNames: p.tagNames,
+        tagMatch: p.tagMatch,
         accountId: p.accountId,
         title: p.title,
         statuses,
@@ -323,11 +330,13 @@ export async function checkIfConnected(client: DraftboardClient, p: CheckIfConne
 
 export interface IntroStatusOverviewParams {
   tagNames?: string[];
+  tagMatch?: "any" | "all";
 }
 
 export async function introStatusOverview(client: DraftboardClient, p: IntroStatusOverviewParams) {
   const targetsPage = await fetchAllPages(
-    (pageNumber) => client.listTargets({ tagNames: p.tagNames, pageNumber, resultPerPage: 100 }),
+    (pageNumber) =>
+      client.listTargets({ tagNames: p.tagNames, tagMatch: p.tagMatch, pageNumber, resultPerPage: 100 }),
     (r) => r.targets ?? [],
     { maxItems: 2000, maxPages: 40 },
   );
@@ -363,6 +372,7 @@ export function registerOutcomeTools(server: McpServer, client: DraftboardClient
         "Find the best warm-introduction opportunities right now. Ranks saved targets by best path rank, then fetches each one's strongest connectors and returns the top intro opportunities (connector → target with shared-history `rankDetails`). Use `ownerIds` for paths through specific teammates, `tagNames`/`statuses`/`accountId`/`title` to scope, `connectorsPerTarget`+`includeRankDetails` for cold-email name-drops. To scope to one company (e.g. \"best intros to my OpenAI targets\"), resolve the company with `list_accounts` and pass its id as `accountId`. An opportunity may also carry `relationships` (how the connector and the target know each other — `current_colleague`, `former_colleague`, `university_classmate`) and `relationshipDetails` (the structured shared company / school / mutual-contact records behind `rankDetails`). BOTH KEYS ARE OMITTED WHEN THERE IS NOTHING TO REPORT, which is often: their absence means \"we hold no structured signal for this pair\", NOT \"these two have no relationship\" — never drop or downrank a connector for missing them, and keep reading `rankDetails`. EXPENSIVE: walks connections per target — always scope with filters; do not call with no narrowing on large lists. Returns a `telemetry` block describing coverage.",
       inputSchema: {
         tagNames: z.array(z.string()).optional().describe("Only consider targets with these tags"),
+        tagMatch: tagMatchSchema,
         accountId: z
           .string()
           .optional()
@@ -433,6 +443,7 @@ export function registerOutcomeTools(server: McpServer, client: DraftboardClient
         "Summarize the customer's targets by status (new / completed / stopped), with an optional per-tag breakdown. Use to track progress across requested intros. Optionally scope to `tagNames`.",
       inputSchema: {
         tagNames: z.array(z.string()).optional().describe("Only summarize targets with these tags"),
+        tagMatch: tagMatchSchema,
       },
       annotations: READ_ONLY,
     },

@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DraftboardClient, Query } from "../client.js";
+import { tagMatchSchema } from "./outcomes.js";
 import { READ_ONLY, WRITE, jsonResult, safeHandler } from "./util.js";
 
 /**
@@ -58,6 +59,7 @@ export function registerProspectingTools(server: McpServer, client: DraftboardCl
           .describe("Only prospects from this search (a `campaignId` returned by search_accounts)"),
         accountId: z.string().optional().describe("Only prospects at this account (company) id"),
         tagIds: z.array(z.string()).optional().describe("Filter by tag ids"),
+        tagMatch: tagMatchSchema,
         pageNumber: z.number().int().positive().optional().describe("1-based page number"),
         resultPerPage: z.number().int().positive().max(100).optional(),
       },

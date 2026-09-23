@@ -62,6 +62,12 @@ describe("DraftboardClient extended methods", () => {
     expect(url).toContain("title=Head");
   });
 
+  it("forwards tagMatch as a plain query param", async () => {
+    const { fetchImpl, client } = mock();
+    await client.listTargets({ tagNames: ["vip", "hot"], tagMatch: "any" });
+    expect(fetchImpl.mock.calls[0][0] as string).toContain("tagMatch=any");
+  });
+
   it("posts an account search body to /search/accounts", async () => {
     const { fetchImpl, client } = mock();
     await client.searchAccounts({ companies: ["acme.com"], titles: ["Head of Sales"] });

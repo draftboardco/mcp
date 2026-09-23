@@ -195,6 +195,13 @@ describe("findTopPaths", () => {
     // no targets at that company → no connection walk
     expect(getTargetConnections).not.toHaveBeenCalled();
   });
+
+  it("forwards tagMatch to listTargets (Notion 2354)", async () => {
+    const listTargets = vi.fn(async () => ({ status: 200, count: 0, nextPage: 0, targets: [] }));
+    const client = fakeClient({ listTargets, getTargetConnections: vi.fn() });
+    await findTopPaths(client, { tagNames: ["a", "b"], tagMatch: "any" });
+    expect(listTargets).toHaveBeenCalledWith(expect.objectContaining({ tagNames: ["a", "b"], tagMatch: "any" }));
+  });
 });
 
 describe("checkIfConnected", () => {
@@ -494,5 +501,11 @@ describe("introStatusOverview", () => {
     expect(out.byTag.q1).toEqual({ new: 1, completed: 1 });
     expect(out.byTag.vip).toEqual({ completed: 1, new: 1 });
     expect(out.total).toBe(3);
+  });
+
+  it("intro_status_overview forwards tagMatch too", async () => {
+    const listTargets = vi.fn(async () => ({ status: 200, count: 0, nextPage: 0, targets: [] }));
+    await introStatusOverview(fakeClient({ listTargets }), { tagNames: ["a"], tagMatch: "all" });
+    expect(listTargets).toHaveBeenCalledWith(expect.objectContaining({ tagMatch: "all" }));
   });
 });
